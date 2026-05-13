@@ -1,6 +1,6 @@
 [project]
 name = "national-park-trip-planner"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.14"
+description = "Builds an itenerary for visiting National Parks"
+requires-python = ">=3.13"
 dependencies = []
