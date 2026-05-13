@@ -12,12 +12,20 @@ First, if you haven't already, install uv:
 pip install uv
 ```
 
-Next, navigate to your project directory and install the dependencies:
+Next, clone or open this repo and from **`national_park_crew`** install dependencies (**`uv sync`** creates a local `.venv` with the correct architecture on Apple Silicon):
 
-(Optional) Lock the dependencies and install them by using the CLI command:
 ```bash
-crewai install
+cd national_park_crew
+uv sync
 ```
+
+(Optional) Initialize crew tooling metadata:
+
+```bash
+uv run crewai install
+```
+
+Older docs used `crewai install` without **`uv`**; on a Mac with multiple Pythons, stick to **`uv run crewai …`** so you use this project’s venv.
 ### Customizing
 
 **Add your `OPENAI_API_KEY` into the `.env` file**
@@ -29,15 +37,20 @@ crewai install
 
 ## Running the Project
 
-To kickstart your crew of AI agents and begin task execution, run this from the root folder of your project:
+From the **`national_park_crew`** directory, prefer **`uv`** so CrewAI runs with this package’s **[`.venv`](.venv)** (correct packages and CPU architecture):
 
 ```bash
-$ crewai run
+cd national_park_crew
+uv sync
+uv run crewai install   # optional; uv sync usually enough
+uv run crewai run
 ```
 
-This command initializes the national_park_crew Crew, assembling the agents and assigning them tasks as defined in your configuration.
+If **`crewai`** is already on your `PATH`, you may use **`crewai run`** after `source .venv/bin/activate` or from a global install—but on a **new Mac (Apple Silicon)** avoid invoking **`/Library/Frameworks/Python.framework/.../crewai`** if you see **`pydantic_core` … incompatible architecture (have 'x86_64', need 'arm64')`**. That means a mismatched Intel/Rosetta or old Python install; use **`uv run crewai …`** from this repo instead.
 
-This example, unmodified, will run the create a `report.md` file with the output of a research on LLMs in the root folder.
+Use the **`crewai`** command (**not** `crew`). **`uv run crewai …`** avoids “command not found” when the CLI is only installed in the virtualenv.
+
+The crew writes itinerary Markdown under **`itinerary/`** (see `tasks.yaml`).
 
 ## Understanding Your Crew
 

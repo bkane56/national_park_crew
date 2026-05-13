@@ -1,8 +1,8 @@
 general_research_task:
   description: >
     Using {trip} and the date of {current_date} as the context,
-    You must determine from the users input their departure city {from} and arrival city {to}, as well as the national 
-    parks are near the arrival city.
+    Validate or revise the seeded departure locale {from}, arrival region {to}, gateway airports ({departure_city},
+    {arrival_city}), and candidate parks scope {national_parks}. Produce a concrete plan for downstream tasks.
     Conduct a thorough research of national parks and commercial airports near a given location.
     Make sure you find all of the national parks which are within an eight hour drive of of that location.
     You must be able to find the arrival and departure dates of the trip, as well as the initial departure airport and 
@@ -56,7 +56,8 @@ national_park_researcher_task:
     arrival and departure dates of the flight.
 
   expected_output: >
-    A list of parks and the activities to do in each park, the length of time needed for each activity, and
+    A list of parks, activities per park with recommended duration, sequencing that fits travel between parks within
+    the trip window bounded by departure_date and return_date, and daily pacing notes where helpful.
   agent: national_park_researcher
 
 reporting_writer_task:
@@ -69,4 +70,4 @@ reporting_writer_task:
     Formatted as markdown without '```'. If a file by that name exists, DO NOT OVERWRITE THE EXISTING FILE,  add the new
     file with a sequence number starting with 2. For example, itinerary_2.md, itinerary_3.md, etc..
   agent: reporting_writer
-  output_file: itinerary/{arrival_city}_{departure_city}.md
+  output_file: itinerary/{departure_city}_to_{arrival_city}.md
