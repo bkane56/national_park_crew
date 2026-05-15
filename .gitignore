@@ -5,6 +5,9 @@ national_park_crew/.env
 .venv/
 __pycache__/
 .DS_Store
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Local product/UI notes — not published to GitHub
 UI_REQUIREMENTS.md
