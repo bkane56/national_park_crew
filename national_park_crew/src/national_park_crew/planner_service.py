@@ -206,12 +206,17 @@ def iter_planner_updates(
     thread.start()
 
     last_event_index = 0
+    last_phase = "Queued"
+    last_message = "Validating inputs and preparing kickoff payload."
     while not status["done"]:
+        emitted_update = False
         while last_event_index < len(progress_events):
             phase, message = progress_events[last_event_index]
             elapsed = int(time.time() - started)
             logs = log_buffer.getvalue()
             inferred_phase = _detect_phase(logs) if phase == "Running" else phase
+            last_phase = inferred_phase
+            last_message = message
             yield {
                 "phase": inferred_phase,
                 "message": message,
@@ -220,6 +225,19 @@ def iter_planner_updates(
                 "done": False,
             }
             last_event_index += 1
+            emitted_update = True
+        if not emitted_update:
+            # Heartbeat update so elapsed time keeps advancing in UI even when
+            # no new phase event has been pushed yet.
+            yield {
+                "phase": _detect_phase(log_buffer.getvalue())
+                if last_phase == "Running"
+                else last_phase,
+                "message": last_message,
+                "elapsed_seconds": int(time.time() - started),
+                "logs": log_buffer.getvalue(),
+                "done": False,
+            }
         time.sleep(poll_seconds)
 
     final_logs = log_buffer.getvalue()

@@ -13,21 +13,36 @@ general_research_task:
     For example, if you are traveling from Tampa, Fl to Jackson, WY you would add Grand Teton National Park and Yellowstone
     National Park, then the best departure airport would be Boseman, MT airport. The return trip must end in Tampa, Fl.
     
-    You must include a list of national parks in the output, as well as the initial departure and arrival airports and 
-    the return departure and arrival airports.
+    You must include:
+    - a primary departure airport near {from} (or nearest practical commercial option),
+    - a ranked list of 3-5 arrival airports near {to},
+    - a recommended primary arrival airport for downstream planning,
+    - the return departure airport recommendation.
+    If {from} has no commercial airport, explicitly state that and provide nearest alternatives.
+    Keep the airport scope relevant to the trip region; do not include unrelated long-haul/global airports.
 
-  expected_output:
-    A list of national parks, arrival and departure dates and the inital arrival location and return departure city if 
-    the initial arrival and return departure are from different airports.
+  expected_output: >
+    A structured list containing:
+    1) Origin airport options near {from} with distance/drive-time notes,
+    2) Arrival airport options near {to} with distance/drive-time notes,
+    3) Selected outbound and return airports for flight research,
+    4) National park shortlist and rationale.
   agent: general_researcher
 
 flight_researcher_task:
   description: >
-    Review the dates of travel and departure/arrival locations you got from the general research task.
-    Use this information to find the best flight to the destination. Keep in mind cost and time of flight.
+    Review the dates of travel and ONLY the departure/arrival airport candidates from the general research task.
+    Use this information to find the best flight options. Keep in mind cost and total travel time.
+    Hard constraints:
+    - Departure airport must be one of the origin airport candidates.
+    - Arrival airport must be one of the destination airport candidates.
+    - Return flight must end at the selected origin airport/metro.
+    - Exclude irrelevant routes (for example: unrelated countries/continents).
+    Return a compact shortlist and mention how many off-scope options were discarded.
   expected_output: >
     A list of flights including the departure airport, the arrival airport, the times of departure and arrival, 
     and you must include the airline, flight number and the cost of the flight.
+    Include only valid flights matching the scoped airport list.
   agent: flight_researcher
 
 accommodation_researcher_task:

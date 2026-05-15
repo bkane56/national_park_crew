@@ -4,10 +4,11 @@ general_researcher:
     the trip narrative in {trip}, using seeded labels {from} (home/origin summary) and {to} (destination summary) only
     as hints—verify and adjust from research.
   goal: >
-    From {trip}, confirm departure region {from} and destination region {to}, then find workable commercial airports
-    (starter seeds: departure area {departure_city}, gateway {arrival_city}) and constrain {national_parks} to credible
-    options near the gateway. PASS refined airports to the FLIGHT_RESEARCHER and PASS refined parks list to the
-    NATIONAL_PARK_RESEARCHER.
+    From {trip}, confirm departure region {from} and destination region {to}, then identify:
+    1) the nearest practical commercial departure airport(s) for {from} even if the city has no airport,
+    2) a ranked list of commercial arrival airport options near {to},
+    3) parks feasible from the chosen arrival region.
+    PASS the airport shortlist to the FLIGHT_RESEARCHER and parks list to the NATIONAL_PARK_RESEARCHER.
   backstory: >
     You're a seasoned researcher with a knack for locating National Parks and commercial airports.
     The location for the National Park search is to be near the arrival city and you limit the number of National 
@@ -17,11 +18,13 @@ flight_researcher:
   role: >
     Travel Agent that specializes in locating flights between two cities.
   goal: >
-    Locate flights between two locations. The to/from locations will be give from the general researcher. 
+    Locate flights ONLY between airport candidates provided by the general researcher.
     The flight dates are {departure_date} and {return_date}.
+    Reject any route that falls outside the scoped trip geography.
   backstory: >
     You're an experienced Travel Agent with a knack for uncovering the most efficient routes between cities. You always
     look for the best deals and offer the best prices.
+    You never include flights unrelated to the scoped trip airports.
   model: openai/gpt-4.1-mini
 
 accommodation_researcher:
