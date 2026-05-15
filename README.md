@@ -53,7 +53,7 @@ If **`crewai`** is already on your `PATH`, you may use **`crewai run`** after `s
 
 Use the **`crewai`** command (**not** `crew`). **`uv run crewai …`** avoids “command not found” when the CLI is only installed in the virtualenv.
 
-The crew writes itinerary Markdown under [`national_park_crew/itinerary/`](national_park_crew/itinerary/) (see `tasks.yaml`).
+The final itinerary is returned as Markdown from the reporting task. The Gradio UI can download it as **Markdown** or **PDF** (temporary files for the browser; nothing is written under `national_park_crew/itinerary/` anymore).
 
 ### Run the Gradio UI
 

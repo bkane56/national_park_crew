@@ -10,6 +10,7 @@ from national_park_crew.planner_service import (
     PlannerRuntimeError,
     build_kickoff_inputs,
     build_trip_summary,
+    itinerary_download_stem,
     iter_planner_updates,
     parse_iso_date,
     run_planner,
@@ -72,6 +73,24 @@ def test_planner_request_date_validation() -> None:
         )
 
 
+def test_planner_request_empty_locations_raise() -> None:
+    base = dict(departure_date="2026-01-01", return_date="2026-01-05")
+    with pytest.raises(PlannerInputError):
+        PlannerRequest(from_location="   ", to_location="Somewhere", **base)
+    with pytest.raises(PlannerInputError):
+        PlannerRequest(from_location="Somewhere", to_location=" \t ", **base)
+
+
+def test_planner_request_accepts_current_date() -> None:
+    PlannerRequest(
+        from_location="A",
+        to_location="B",
+        departure_date="2026-01-01",
+        return_date="2026-01-05",
+        current_date="2026-02-02",
+    )
+
+
 def test_build_trip_summary_fallback() -> None:
     req = PlannerRequest(
         from_location="Venice, Florida",
@@ -95,23 +114,32 @@ def test_build_kickoff_inputs_defaults_and_overrides() -> None:
     assert payload["trip"] == "Trip summary"
 
 
+def test_itinerary_download_stem() -> None:
+    assert itinerary_download_stem(sample_request()) == "Florida_Gulf_Coast_to_Salt_Lake_City_UT"
+
+
 def test_run_planner_success_with_string_result() -> None:
     result = run_planner(sample_request(), crew_factory=lambda: DummyNationalParkCrew(result="# Itinerary"))
     assert "# Itinerary" in result.markdown
-    assert result.output_path is None
 
 
-def test_run_planner_reads_generated_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_planner_none_result_message() -> None:
+    result = run_planner(sample_request(), crew_factory=lambda: DummyNationalParkCrew(result=None))
+    assert "No itinerary output" in result.markdown
+
+
+def test_run_planner_prefers_string_over_existing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     itinerary_dir = tmp_path / "itinerary"
     itinerary_dir.mkdir(parents=True)
-    expected_file = itinerary_dir / "Florida_Gulf_Coast_to_Salt_Lake_City_UT.md"
-    expected_file.write_text("file content", encoding="utf-8")
+    stale = itinerary_dir / "Florida_Gulf_Coast_to_Salt_Lake_City_UT.md"
+    stale.write_text("ignored file content", encoding="utf-8")
 
-    result = run_planner(sample_request(), crew_factory=lambda: DummyNationalParkCrew(result="ignored"))
-    assert result.markdown == "file content"
-    assert result.output_path is not None
-    assert result.output_path.resolve() == expected_file.resolve()
+    result = run_planner(
+        sample_request(),
+        crew_factory=lambda: DummyNationalParkCrew(result="from crew string"),
+    )
+    assert result.markdown == "from crew string"
 
 
 def test_run_planner_maps_runtime_error() -> None:

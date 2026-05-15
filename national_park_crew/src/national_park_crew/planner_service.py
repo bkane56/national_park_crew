@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from pathlib import Path
 import io
 import os
 import re
@@ -67,7 +66,6 @@ class PlannerRequest:
 @dataclass(frozen=True)
 class PlannerResult:
     markdown: str
-    output_path: Optional[Path]
     raw_result: object
     log_output: str
 
@@ -114,16 +112,19 @@ def build_kickoff_inputs(request: PlannerRequest) -> dict[str, str]:
     }
 
 
-def _extract_markdown(raw_result: object, inputs: dict[str, str]) -> tuple[str, Optional[Path]]:
-    output_file = Path("itinerary") / f"{inputs['departure_city']}_to_{inputs['arrival_city']}.md"
-    if output_file.exists():
-        return output_file.read_text(encoding="utf-8"), output_file
+def itinerary_download_stem(request: PlannerRequest) -> str:
+    """Suggested download filename stem (does not persist to disk)."""
+    inputs = build_kickoff_inputs(request)
+    return f"{inputs['departure_city']}_to_{inputs['arrival_city']}"
 
+
+def _extract_markdown(raw_result: object) -> str:
+    """Use the crew kickoff result only; do not read from the filesystem."""
     if isinstance(raw_result, str):
-        return raw_result, None
+        return raw_result
     if raw_result is None:
-        return "No itinerary output was returned by the crew.", None
-    return str(raw_result), None
+        return "No itinerary output was returned by the crew."
+    return str(raw_result)
 
 
 def run_planner(
@@ -147,11 +148,10 @@ def run_planner(
     except Exception as exc:  # noqa: BLE001 - we re-map to user-safe runtime error
         raise PlannerRuntimeError(f"Planner run failed: {exc}") from exc
 
-    markdown, output_path = _extract_markdown(raw_result, inputs)
+    markdown = _extract_markdown(raw_result)
     progress_callback("Completed", "Itinerary generated successfully.")
     return PlannerResult(
         markdown=markdown,
-        output_path=output_path,
         raw_result=raw_result,
         log_output=log_buffer.getvalue(),
     )
@@ -187,10 +187,9 @@ def iter_planner_updates(
             progress_callback("Running", "CrewAI agents are now executing tasks.")
             with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
                 raw_result = crew_factory().crew().kickoff(inputs=inputs)
-            markdown, output_path = _extract_markdown(raw_result, inputs)
+            markdown = _extract_markdown(raw_result)
             status["result"] = PlannerResult(
                 markdown=markdown,
-                output_path=output_path,
                 raw_result=raw_result,
                 log_output=log_buffer.getvalue(),
             )

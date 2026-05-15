@@ -19,7 +19,7 @@ def run():
     Run the crew.
     """
     # CrewAI interpolates every `{name}` in agent/task YAML before kickoff—all keys below must stay in sync with
-    # config/agents.yaml and config/tasks.yaml (including itinerary output_file template).
+    # config/agents.yaml and config/tasks.yaml template placeholders.
     request = PlannerRequest(
         trip="I live in Venice, Florida. I want to visit the National Parks near Salt Lake City, Utah.",
         current_date=str(datetime.now().date()),

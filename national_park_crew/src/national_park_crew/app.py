@@ -2,21 +2,24 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 import re
-from typing import Optional
-
 import gradio as gr
 
+from .export_utils import build_download_file
 from .planner_service import (
     DEFAULT_PARK_SCOPE,
     PlannerInputError,
     PlannerRequest,
     PlannerRuntimeError,
     iter_planner_updates,
+    itinerary_download_stem,
 )
 
 
 EXAMPLE_FROM = "Venice, Florida"
 EXAMPLE_TO = "Salt Lake City, Utah area"
+
+FORMAT_MARKDOWN = "Markdown (.md)"
+FORMAT_PDF = "PDF (.pdf)"
 
 _ACTIVITY_RULES = [
     (re.compile(r"\bflight|airline|fare|layover|nonstop\b", re.IGNORECASE), "Checking flight options and prices."),
@@ -25,12 +28,6 @@ _ACTIVITY_RULES = [
     (re.compile(r"\bnational park|trail|activity|itinerary day|day \d+\b", re.IGNORECASE), "Planning park activities and pacing."),
     (re.compile(r"\breport|markdown|write|summary\b", re.IGNORECASE), "Composing the final itinerary report."),
 ]
-
-
-def _safe_download_path(path: Optional[object]) -> Optional[str]:
-    if path is None:
-        return None
-    return str(path)
 
 
 def _phase_message(phase: str) -> str:
@@ -123,6 +120,17 @@ def _build_request(
     )
 
 
+def refresh_download(payload: dict, format_choice: str) -> str | None:
+    """Rebuild exported file when the user switches format after a run completes."""
+    if not payload or not str(payload.get("markdown", "")).strip():
+        return None
+    return build_download_file(
+        str(payload["markdown"]),
+        str(payload.get("stem") or "itinerary"),
+        format_choice,
+    )
+
+
 def run_from_ui(
     from_location: str,
     to_location: str,
@@ -132,7 +140,9 @@ def run_from_ui(
     park_scope: str,
     departure_slug: str,
     arrival_slug: str,
+    download_format: str,
 ):
+    empty_payload: dict[str, str] = {}
     try:
         request = _build_request(
             from_location,
@@ -146,7 +156,7 @@ def run_from_ui(
         )
     except PlannerInputError as exc:
         message = f"Input validation failed: {exc}"
-        yield message, "", "", None
+        yield message, "", "", empty_payload, None
         return
 
     try:
@@ -177,12 +187,14 @@ def run_from_ui(
 
             if update["done"]:
                 result = update["result"]
-                output_file = _safe_download_path(result.output_path)
-                yield status_block, result.markdown, log_block, output_file
+                stem = itinerary_download_stem(request)
+                payload: dict[str, str] = {"markdown": result.markdown, "stem": stem}
+                path = build_download_file(result.markdown, stem, download_format)
+                yield status_block, result.markdown, log_block, payload, path
             else:
-                yield status_block, "", log_block, None
+                yield status_block, "", log_block, empty_payload, None
     except (PlannerRuntimeError, PlannerInputError) as exc:
-        yield f"Planner error: {exc}", "", "", None
+        yield f"Planner error: {exc}", "", "", empty_payload, None
 
 
 def default_dates() -> tuple[str, str]:
@@ -242,12 +254,12 @@ def build_app() -> gr.Blocks:
                 departure_slug = gr.Textbox(
                     label="Departure airport key (optional)",
                     placeholder="Florida_Gulf_Coast",
-                    info="Optional power-user field. Leave blank unless you want to control the output filename key.",
+                    info="Optional. Used for the suggested download filename stem (not written to the repo).",
                 )
                 arrival_slug = gr.Textbox(
                     label="Arrival airport key (optional)",
                     placeholder="Salt_Lake_City_UT",
-                    info="Optional power-user field. Leave blank unless you want to control the output filename key.",
+                    info="Optional. Used for the suggested download filename stem (not written to the repo).",
                 )
 
         with gr.Row():
@@ -257,7 +269,14 @@ def build_app() -> gr.Blocks:
         status_output = gr.Markdown(label="Status")
         itinerary_output = gr.Markdown(label="Itinerary")
         logs_output = gr.Textbox(label="Execution Logs", lines=12)
-        download_output = gr.File(label="Generated Itinerary File")
+        itinerary_payload = gr.State({})
+        download_format = gr.Radio(
+            choices=[FORMAT_MARKDOWN, FORMAT_PDF],
+            value=FORMAT_MARKDOWN,
+            label="Download format",
+            info="Choose Markdown for editing, or PDF for sharing. You can switch after a run completes without re-running.",
+        )
+        download_output = gr.File(label="Download itinerary")
 
         run_button.click(
             run_from_ui,
@@ -270,8 +289,15 @@ def build_app() -> gr.Blocks:
                 park_scope,
                 departure_slug,
                 arrival_slug,
+                download_format,
             ],
-            outputs=[status_output, itinerary_output, logs_output, download_output],
+            outputs=[status_output, itinerary_output, logs_output, itinerary_payload, download_output],
+        )
+
+        download_format.change(
+            refresh_download,
+            inputs=[itinerary_payload, download_format],
+            outputs=[download_output],
         )
 
         reset_button.click(
@@ -283,9 +309,11 @@ def build_app() -> gr.Blocks:
                 DEFAULT_PARK_SCOPE,
                 "",
                 "",
+                FORMAT_MARKDOWN,
                 "Ready to run example.",
                 "",
                 "",
+                {},
                 None,
             ],
             outputs=[
@@ -297,9 +325,11 @@ def build_app() -> gr.Blocks:
                 park_scope,
                 departure_slug,
                 arrival_slug,
+                download_format,
                 status_output,
                 itinerary_output,
                 logs_output,
+                itinerary_payload,
                 download_output,
             ],
         )

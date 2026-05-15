@@ -79,10 +79,9 @@ reporting_writer_task:
   description: >
     Review the context you got and write an itinerary report based on the information you gathered from the other tasks.
     The report should be in markdown format and contain all of the information you gathered from the other tasks.
-    You also should provide a of the itinerary as an excel spreadsheet in the same folder as the markdown report.
+    Do not attempt to write itinerary files to disk; the application will provide the full markdown to the user for download.
+    Optionally describe day-by-day logistics in markdown tables in the report itself if that helps readability.
   expected_output: >
     A fully fledged report with the main topics, each with a full section of information.
-    Formatted as markdown without '```'. If a file by that name exists, DO NOT OVERWRITE THE EXISTING FILE,  add the new
-    file with a sequence number starting with 2. For example, itinerary_2.md, itinerary_3.md, etc..
+    Formatted as markdown without '```'. Return the entire report as plain markdown text—this becomes the downloadable itinerary.
   agent: reporting_writer
-  output_file: itinerary/{departure_city}_to_{arrival_city}.md
