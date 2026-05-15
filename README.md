@@ -2,6 +2,8 @@
 
 NationalParkCrew — a multi-agent trip planning pipeline powered by [crewAI](https://crewai.com). This repo is designed to help you set up collaborators (research, flights, lodging, itinerary writing) with the framework CrewAI provides.
 
+The canonical Python project configuration lives in `national_park_crew/pyproject.toml`.
+
 ## Installation
 
 Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
@@ -52,6 +54,18 @@ If **`crewai`** is already on your `PATH`, you may use **`crewai run`** after `s
 Use the **`crewai`** command (**not** `crew`). **`uv run crewai …`** avoids “command not found” when the CLI is only installed in the virtualenv.
 
 The crew writes itinerary Markdown under [`national_park_crew/itinerary/`](national_park_crew/itinerary/) (see `tasks.yaml`).
+
+### Run the Gradio UI
+
+```bash
+cd national_park_crew
+uv sync
+uv run run_ui
+```
+
+Then open `http://localhost:7860`.
+
+For production deployment guidance, see [`national_park_crew/DEPLOYMENT.md`](national_park_crew/DEPLOYMENT.md).
 
 ## Understanding Your Crew
 

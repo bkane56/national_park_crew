@@ -5,6 +5,7 @@ import warnings
 from datetime import datetime
 
 from .crew import NationalParkCrew
+from .planner_service import DEFAULT_PARK_SCOPE, PlannerRequest, run_planner
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -19,23 +20,20 @@ def run():
     """
     # CrewAI interpolates every `{name}` in agent/task YAML before kickoff—all keys below must stay in sync with
     # config/agents.yaml and config/tasks.yaml (including itinerary output_file template).
-    inputs = {
-        'trip': 'I live in Venice, Florida. I want to visit the National Parks near Salt Lake City, Utah.',
-        'current_date': str(datetime.now().date()),
-        'from': 'Venice, Florida',
-        'to': 'Salt Lake City, Utah area',
-        'departure_city': 'Florida_Gulf_Coast',
-        'arrival_city': 'Salt_Lake_City_UT',
-        'national_parks': (
-            'Utah Mighty 5 and nearby NPS units within ~8 hr drive of Salt Lake City '
-            '(e.g. Zion, Bryce Canyon, Capitol Reef, Arches, Canyonlands)—refine based on dates and pacing.'
-        ),
-        'departure_date': '2026-07-18',
-        'return_date': '2026-07-27',
-    }
+    request = PlannerRequest(
+        trip="I live in Venice, Florida. I want to visit the National Parks near Salt Lake City, Utah.",
+        current_date=str(datetime.now().date()),
+        from_location="Venice, Florida",
+        to_location="Salt Lake City, Utah area",
+        departure_city_slug="Florida_Gulf_Coast",
+        arrival_city_slug="Salt_Lake_City_UT",
+        national_parks=DEFAULT_PARK_SCOPE,
+        departure_date="2026-07-18",
+        return_date="2026-07-27",
+    )
 
     try:
-        NationalParkCrew().crew().kickoff(inputs=inputs)
+        run_planner(request)
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 

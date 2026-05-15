@@ -10,3 +10,9 @@ uv sync
 uv run crewai run
 ```
 
+To launch the recruiter-facing Gradio app:
+
+```bash
+uv run run_ui
+```
+
