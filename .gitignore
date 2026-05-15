@@ -9,5 +9,8 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 
+# Generated itinerary artifacts from development runs
+national_park_crew/itinerary/
+
 # Local product/UI notes — not published to GitHub
 UI_REQUIREMENTS.md

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from hmac import compare_digest
+from importlib import resources
 import io
 import os
 import re
@@ -15,6 +17,10 @@ DEFAULT_PARK_SCOPE = (
     "Utah Mighty 5 and nearby NPS units within ~8 hr drive of Salt Lake City "
     "(e.g. Zion, Bryce Canyon, Capitol Reef, Arches, Canyonlands)—refine based on dates and pacing."
 )
+DEMO_MODE_LABEL = "Demo mode - mocked data"
+REAL_MODE_LABEL = "Real planning run - access code required"
+REAL_RUNS_ENABLED_ENV = "REAL_RUNS_ENABLED"
+REAL_RUN_ACCESS_CODE_ENV = "REAL_RUN_ACCESS_CODE"
 
 # CrewAI telemetry installs signal handlers. In Gradio queue workers this code runs
 # outside the main thread, which can produce noisy signal registration tracebacks.
@@ -36,6 +42,10 @@ class PlannerInputError(ValueError):
 
 class PlannerRuntimeError(RuntimeError):
     """Raised when planner execution fails."""
+
+
+class RealRunAccessError(PlannerInputError):
+    """Raised when a visitor asks for a real paid run without authorization."""
 
 
 @dataclass(frozen=True)
@@ -125,6 +135,51 @@ def _extract_markdown(raw_result: object) -> str:
     if raw_result is None:
         return "No itinerary output was returned by the crew."
     return str(raw_result)
+
+
+def _env_flag_enabled(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def real_runs_enabled(env: Optional[dict[str, str]] = None) -> bool:
+    values = os.environ if env is None else env
+    return _env_flag_enabled(values.get(REAL_RUNS_ENABLED_ENV))
+
+
+def validate_real_run_access(access_code: str, env: Optional[dict[str, str]] = None) -> None:
+    values = os.environ if env is None else env
+    if not real_runs_enabled(env):
+        raise RealRunAccessError("Real planning runs are currently disabled for this demo.")
+
+    expected_code = values.get(REAL_RUN_ACCESS_CODE_ENV, "")
+    submitted_code = access_code.strip()
+    if not expected_code or not submitted_code or not compare_digest(submitted_code, expected_code):
+        raise RealRunAccessError("A valid access code is required for real planning runs.")
+
+
+def load_demo_itinerary() -> str:
+    return resources.files("national_park_crew.demo_data").joinpath("sample_itinerary.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def demo_planner_result() -> PlannerResult:
+    return PlannerResult(
+        markdown=load_demo_itinerary(),
+        raw_result={"mode": "mocked_demo"},
+        log_output="Demo mode used mocked itinerary data. CrewAI, OpenAI, and web tools were not called.",
+    )
+
+
+def iter_demo_planner_updates(_request: PlannerRequest) -> Iterator[dict[str, object]]:
+    yield {
+        "phase": "Demo mode - mocked data",
+        "message": "Returning mocked itinerary data. No live AI, web search, or paid API calls are made.",
+        "elapsed_seconds": 0,
+        "logs": "Demo mode: mocked itinerary data returned from packaged sample content.",
+        "done": True,
+        "result": demo_planner_result(),
+    }
 
 
 def run_planner(
@@ -255,3 +310,23 @@ def iter_planner_updates(
         "done": True,
         "result": result,
     }
+
+
+def iter_planner_updates_for_mode(
+    request: PlannerRequest,
+    run_mode: str,
+    access_code: str,
+    poll_seconds: float = 1.0,
+    crew_factory: Optional[Callable[[], object]] = None,
+    env: Optional[dict[str, str]] = None,
+) -> Iterator[dict[str, object]]:
+    if run_mode == REAL_MODE_LABEL:
+        validate_real_run_access(access_code, env=env)
+        yield from iter_planner_updates(
+            request,
+            poll_seconds=poll_seconds,
+            crew_factory=crew_factory,
+        )
+        return
+
+    yield from iter_demo_planner_updates(request)

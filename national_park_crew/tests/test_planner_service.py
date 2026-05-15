@@ -5,11 +5,15 @@ from pathlib import Path
 import pytest
 
 from national_park_crew.planner_service import (
+    DEMO_MODE_LABEL,
+    REAL_MODE_LABEL,
     PlannerInputError,
     PlannerRequest,
     PlannerRuntimeError,
+    RealRunAccessError,
     build_kickoff_inputs,
     build_trip_summary,
+    iter_planner_updates_for_mode,
     itinerary_download_stem,
     iter_planner_updates,
     parse_iso_date,
@@ -168,3 +172,68 @@ def test_iter_planner_updates_error() -> None:
                 crew_factory=lambda: DummyNationalParkCrew(error=RuntimeError("bad")),
             )
         )
+
+
+def test_demo_mode_returns_mocked_itinerary_without_calling_crew() -> None:
+    def fail_if_called() -> DummyNationalParkCrew:
+        raise AssertionError("Demo mode must not call the paid CrewAI workflow")
+
+    updates = list(
+        iter_planner_updates_for_mode(
+            sample_request(),
+            run_mode=DEMO_MODE_LABEL,
+            access_code="",
+            poll_seconds=0.01,
+            crew_factory=fail_if_called,
+            env={},
+        )
+    )
+
+    assert updates[-1]["done"] is True
+    assert updates[-1]["phase"] == "Demo mode - mocked data"
+    assert "mocked itinerary data" in updates[-1]["message"].lower()
+    assert "MOCKED DEMO DATA" in updates[-1]["result"].markdown
+
+
+def test_real_mode_rejects_missing_or_invalid_access_code() -> None:
+    with pytest.raises(RealRunAccessError):
+        list(
+            iter_planner_updates_for_mode(
+                sample_request(),
+                run_mode=REAL_MODE_LABEL,
+                access_code="wrong",
+                poll_seconds=0.01,
+                crew_factory=lambda: DummyNationalParkCrew(result="should not run"),
+                env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
+            )
+        )
+
+
+def test_real_mode_requires_feature_flag_even_with_valid_access_code() -> None:
+    with pytest.raises(RealRunAccessError):
+        list(
+            iter_planner_updates_for_mode(
+                sample_request(),
+                run_mode=REAL_MODE_LABEL,
+                access_code="secret",
+                poll_seconds=0.01,
+                crew_factory=lambda: DummyNationalParkCrew(result="should not run"),
+                env={"REAL_RUNS_ENABLED": "false", "REAL_RUN_ACCESS_CODE": "secret"},
+            )
+        )
+
+
+def test_real_mode_allows_valid_access_code() -> None:
+    updates = list(
+        iter_planner_updates_for_mode(
+            sample_request(),
+            run_mode=REAL_MODE_LABEL,
+            access_code="secret",
+            poll_seconds=0.01,
+            crew_factory=lambda: DummyNationalParkCrew(result="real run"),
+            env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
+        )
+    )
+
+    assert updates[-1]["done"] is True
+    assert updates[-1]["result"].markdown == "real run"

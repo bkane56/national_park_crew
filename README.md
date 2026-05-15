@@ -1,61 +1,72 @@
 # National Park Trip Planner
 
-NationalParkCrew — a multi-agent trip planning pipeline powered by [crewAI](https://crewai.com). This repo is designed to help you set up collaborators (research, flights, lodging, itinerary writing) with the framework CrewAI provides.
+A portfolio-grade AI trip planner that uses a CrewAI multi-agent workflow to research airports, flights, lodging, national park activities, and a final itinerary. The public UI includes a mocked demo mode for safe recruiter review and a gated real-run mode for authorized users.
 
-The canonical Python project configuration lives in `national_park_crew/pyproject.toml`.
+## Highlights
 
-## Installation
+- Multi-agent CrewAI pipeline with role-specific research and writing agents.
+- Gradio web UI with streamed progress updates and downloadable Markdown/PDF output.
+- Public mocked demo mode that never calls OpenAI, CrewAI tools, web search, or paid APIs.
+- Access-code-gated real mode controlled by server-side environment secrets.
+- Python project managed with `uv`, tested with `pytest`, and deployable as a Hugging Face Docker Space.
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
+## Tech Stack
 
-First, if you haven't already, install uv:
+- **Language:** Python 3.10-3.13
+- **Agent framework:** CrewAI
+- **UI:** Gradio
+- **Exports:** Markdown and PDF via ReportLab
+- **Dependency management:** uv
+- **Testing:** pytest and pytest-cov
+- **Deployment target:** Hugging Face Spaces using Docker
+
+## Architecture
+
+```mermaid
+flowchart LR
+  user[Visitor] --> ui[Gradio UI]
+  ui --> mode{Run mode}
+  mode -->|Demo mode| mock[Packaged mocked itinerary]
+  mode -->|Real mode| gate[Access code check]
+  gate -->|Invalid or disabled| blocked[No paid workflow invoked]
+  gate -->|Valid| crew[CrewAI sequential crew]
+  crew --> agents[Research and writer agents]
+  agents --> tools[Website search and scrape tools]
+  agents --> llm[OpenAI model]
+  mock --> export[Markdown or PDF download]
+  crew --> export
+```
+
+The important safety boundary is in `planner_service.py`: demo mode returns packaged sample content immediately, while real mode validates `REAL_RUNS_ENABLED` and `REAL_RUN_ACCESS_CODE` before the CrewAI workflow can start.
+
+## Project Structure
+
+```text
+national_park_crew/
+|-- pyproject.toml
+|-- src/national_park_crew/
+|   |-- app.py                    # Gradio UI
+|   |-- planner_service.py        # Validation, demo mode, access gate, CrewAI runner
+|   |-- crew.py                   # CrewAI agents/tasks wiring
+|   |-- export_utils.py           # Markdown/PDF download helpers
+|   |-- demo_data/                # Packaged mocked itinerary data
+|   `-- config/
+|       |-- agents.yaml           # Agent roles, goals, and model choices
+|       `-- tasks.yaml            # Sequential planning tasks
+`-- tests/
+    |-- test_planner_service.py
+    `-- test_export_utils.py
+```
+
+## Run Locally
+
+Install `uv` if needed:
 
 ```bash
 pip install uv
 ```
 
-Clone or open this repo, then from the **`national_park_crew`** package directory install dependencies (**`uv sync`** creates a local [`.venv`](national_park_crew/.venv) with the correct architecture on Apple Silicon):
-
-```bash
-cd national_park_crew
-uv sync
-```
-
-(Optional) Initialize crew tooling metadata:
-
-```bash
-uv run crewai install
-```
-
-Older docs used `crewai install` without **`uv`**; on a Mac with multiple Pythons, stick to **`uv run crewai …`** so you use this project’s venv.
-
-### Customizing
-
-**Add your `OPENAI_API_KEY` into `.env`** (copy from [`national_park_crew/.env.example`](national_park_crew/.env.example)).
-
-- Agents: [`national_park_crew/src/national_park_crew/config/agents.yaml`](national_park_crew/src/national_park_crew/config/agents.yaml)
-- Tasks: [`national_park_crew/src/national_park_crew/config/tasks.yaml`](national_park_crew/src/national_park_crew/config/tasks.yaml)
-- Tools and wiring: [`national_park_crew/src/national_park_crew/crew.py`](national_park_crew/src/national_park_crew/crew.py)
-- Run inputs / kickoff payloads: [`national_park_crew/src/national_park_crew/main.py`](national_park_crew/src/national_park_crew/main.py)
-
-## Running the Project
-
-From **`national_park_crew/`**, prefer **`uv`** so CrewAI runs with that package’s [`.venv`](national_park_crew/.venv) (correct packages and CPU architecture):
-
-```bash
-cd national_park_crew
-uv sync
-uv run crewai install   # optional; uv sync usually enough
-uv run crewai run
-```
-
-If **`crewai`** is already on your `PATH`, you may use **`crewai run`** after `source .venv/bin/activate` or from a global install—but on a **new Mac (Apple Silicon)** avoid invoking **`/Library/Frameworks/Python.framework/.../crewai`** if you see **`pydantic_core` … incompatible architecture (have 'x86_64', need 'arm64')`**. That means a mismatched Intel/Rosetta or old Python install; use **`uv run crewai …`** from this repo instead.
-
-Use the **`crewai`** command (**not** `crew`). **`uv run crewai …`** avoids “command not found” when the CLI is only installed in the virtualenv.
-
-The final itinerary is returned as Markdown from the reporting task. The Gradio UI can download it as **Markdown** or **PDF** (temporary files for the browser; nothing is written under `national_park_crew/itinerary/` anymore).
-
-### Run the Gradio UI
+Install dependencies and start the Gradio UI:
 
 ```bash
 cd national_park_crew
@@ -63,20 +74,54 @@ uv sync
 uv run run_ui
 ```
 
-Then open `http://localhost:7860`.
+Open `http://localhost:7860`.
 
-For production deployment guidance, see [`national_park_crew/DEPLOYMENT.md`](national_park_crew/DEPLOYMENT.md).
+By default, the UI runs in **Demo mode - mocked data**. That path does not require API keys.
 
-## Understanding Your Crew
+## Real CrewAI Runs
 
-The crew is composed of multiple agents defined in YAML. They collaborate on tasks in [`national_park_crew/src/national_park_crew/config/tasks.yaml`](national_park_crew/src/national_park_crew/config/tasks.yaml). Agent roles and goals are in [`national_park_crew/src/national_park_crew/config/agents.yaml`](national_park_crew/src/national_park_crew/config/agents.yaml).
+Real runs require environment variables. Copy the example file and add your secrets:
 
-## Support
+```bash
+cd national_park_crew
+cp .env.example .env
+```
 
-For support, questions, or feedback regarding CrewAI generally:
+Required for real runs:
 
-- [CrewAI documentation](https://docs.crewai.com)
-- [CrewAI GitHub](https://github.com/joaomdmoura/crewai)
-- [Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with CrewAI docs](https://chatg.pt/DWjSBZn)
+- `OPENAI_API_KEY`: OpenAI key used by CrewAI agents.
+- `REAL_RUNS_ENABLED=true`: Enables authorized real runs.
+- `REAL_RUN_ACCESS_CODE`: Private code entered in the UI to unlock real execution.
 
+Optional operational toggles:
+
+- `CREWAI_DISABLE_TELEMETRY=true`
+- `OTEL_SDK_DISABLED=true`
+
+If `REAL_RUNS_ENABLED` is false or the access code is missing/incorrect, the app refuses the real run before invoking CrewAI or paid APIs.
+
+## Test
+
+```bash
+cd national_park_crew
+uv run --group dev pytest
+```
+
+The tests cover request validation, mocked demo mode, real-run access gating, streamed planner updates, and export-file generation.
+
+## Deployment Notes
+
+The app is designed for a Gradio-based portfolio demo. Hugging Face Spaces is the preferred public demo host, but this project uses a **Docker Space** rather than the default Gradio SDK so dependency versions stay under project control.
+
+Recommended public setup:
+
+- Link the Hugging Face Space as the **Live Demo**.
+- Link this GitHub repository as **View Code**.
+- Run the public Space in demo mode by default.
+- Store `OPENAI_API_KEY`, `REAL_RUNS_ENABLED`, and `REAL_RUN_ACCESS_CODE` as Hugging Face Secrets, not in source control.
+
+See `national_park_crew/DEPLOYMENT.md` for additional deployment context.
+
+## Why This Project Matters
+
+This project demonstrates practical AI application engineering rather than a simple prompt wrapper: agent decomposition, external tool use, UI streaming, file export, test coverage, secret handling, and cost-aware demo controls. The public mock mode is intentional so reviewers can evaluate the product experience without triggering paid LLM usage.

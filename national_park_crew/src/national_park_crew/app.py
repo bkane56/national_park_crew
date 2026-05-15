@@ -7,10 +7,12 @@ import gradio as gr
 from .export_utils import build_download_file
 from .planner_service import (
     DEFAULT_PARK_SCOPE,
+    DEMO_MODE_LABEL,
     PlannerInputError,
     PlannerRequest,
     PlannerRuntimeError,
-    iter_planner_updates,
+    REAL_MODE_LABEL,
+    iter_planner_updates_for_mode,
     itinerary_download_stem,
 )
 
@@ -140,6 +142,8 @@ def run_from_ui(
     park_scope: str,
     departure_slug: str,
     arrival_slug: str,
+    run_mode: str,
+    access_code: str,
     download_format: str,
 ):
     empty_payload: dict[str, str] = {}
@@ -163,7 +167,12 @@ def run_from_ui(
         timeline: list[str] = ["Queued request and validating inputs."]
         previous_phase = "Queued"
         processed_log_length = 0
-        for update in iter_planner_updates(request, poll_seconds=5.0):
+        for update in iter_planner_updates_for_mode(
+            request,
+            run_mode=run_mode,
+            access_code=access_code,
+            poll_seconds=5.0,
+        ):
             phase = update["phase"]
             message = update["message"]
             elapsed = update["elapsed_seconds"]
@@ -223,6 +232,10 @@ def build_app() -> gr.Blocks:
             "This demo is for portfolio evaluation and educational use."
         )
         gr.Markdown(
+            "**Public demo mode uses mocked itinerary data.** It does not run live AI, web search, "
+            "or paid API calls. Real CrewAI planning runs require an access code from the project owner."
+        )
+        gr.Markdown(
             "**Runtime note:** CrewAI runs can take several minutes depending on research/tool calls. "
             "Recent runs have taken up to ~8 min 30 sec."
         )
@@ -247,6 +260,18 @@ def build_app() -> gr.Blocks:
             lines=3,
             value=DEFAULT_PARK_SCOPE,
             info="Advanced users can narrow or expand target parks.",
+        )
+        run_mode = gr.Radio(
+            choices=[DEMO_MODE_LABEL, REAL_MODE_LABEL],
+            value=DEMO_MODE_LABEL,
+            label="Run mode",
+            info="Demo mode returns mocked UI data. Real mode requires a private access code and may use paid API calls.",
+        )
+        access_code = gr.Textbox(
+            label="Access code for real planning runs",
+            type="password",
+            placeholder="Leave blank for public mocked demo mode",
+            info="Only needed when selecting the real planning run mode.",
         )
 
         with gr.Accordion("Power User Options", open=False):
@@ -289,6 +314,8 @@ def build_app() -> gr.Blocks:
                 park_scope,
                 departure_slug,
                 arrival_slug,
+                run_mode,
+                access_code,
                 download_format,
             ],
             outputs=[status_output, itinerary_output, logs_output, itinerary_payload, download_output],
@@ -307,6 +334,8 @@ def build_app() -> gr.Blocks:
                 *default_dates(),
                 example_trip_summary(),
                 DEFAULT_PARK_SCOPE,
+                DEMO_MODE_LABEL,
+                "",
                 "",
                 "",
                 FORMAT_MARKDOWN,
@@ -323,6 +352,8 @@ def build_app() -> gr.Blocks:
                 return_date,
                 trip_summary,
                 park_scope,
+                run_mode,
+                access_code,
                 departure_slug,
                 arrival_slug,
                 download_format,

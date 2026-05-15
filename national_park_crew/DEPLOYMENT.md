@@ -1,26 +1,28 @@
-# Deployment Guide (Railway + Gradio)
+# Deployment Guide (Hugging Face Docker Space)
 
-This project is designed for a recruiter-facing demo with low traffic and long-running CrewAI tasks.
+This project is designed for a recruiter-facing demo with a safe mocked public mode and an optional access-code-gated real CrewAI mode.
 
 ## Recommended host
 
-- **Railway** for the live planner app (long-running Python process, simple env var management, custom domain support).
-- Keep **`brianekane.com`** on Vercel and link to this demo URL.
+- **Hugging Face Spaces** for the public Gradio demo.
+- Use the **Docker Space** SDK so dependency versions stay under project control.
+- Keep the portfolio website on Vercel and link to the Space as the live demo.
 
 ## Runtime setup
 
-1. Create a new Railway project from this repository.
-2. Set project root to `national_park_crew/`.
-3. Ensure Python 3.10-3.13 runtime is available.
-4. Railway should detect `Procfile` and run:
-   - `web: uv run run_ui`
+1. Create a Hugging Face Space.
+2. Select **Docker** as the Space SDK.
+3. Push a Space repo containing the root `app.py`, `requirements.txt`, `Dockerfile`, and this package's `src/` tree.
+4. Set the Space to public only after confirming demo mode returns mocked data by default.
 
-## Required environment variables
+## Environment variables
 
-- `OPENAI_API_KEY` (required)
-- Any additional provider keys used by CrewAI tools
+- `OPENAI_API_KEY`: required only for real CrewAI runs.
+- `REAL_RUNS_ENABLED`: set to `true` only when you want access-code-gated real runs available.
+- `REAL_RUN_ACCESS_CODE`: private code trusted reviewers can enter in the UI.
+- Any additional provider keys used by CrewAI tools.
 
-Do not commit `.env` files to source control.
+Store these as Hugging Face Secrets. Do not commit `.env` files or secrets to source control.
 
 ## Local verification
 
@@ -34,14 +36,16 @@ Visit `http://localhost:7860`.
 
 ## Post-deploy checklist
 
-- Confirm itinerary generation works from a fresh browser session.
+- Confirm the default public flow says it is using mocked itinerary data.
+- Confirm demo mode does not require `OPENAI_API_KEY`.
+- Confirm invalid real-run access codes fail without invoking CrewAI.
+- Confirm a valid access code can run a real itinerary while the Space is private.
 - Confirm failure path returns user-safe messages (no stack trace leaks).
-- Optional: map `demo.brianekane.com` to the Railway service.
 
 ## Portfolio card link targets
 
 Use these targets in your Vercel-hosted portfolio project card:
 
-- **Live demo:** deployed Railway URL (or `demo.brianekane.com`)
+- **Live demo:** deployed Hugging Face Space URL
 - **Repository:** `https://github.com/briankane/National_Park_Trip_Planner`
-- **Tech tags:** `Python`, `CrewAI`, `Gradio`, `Agentic AI`
+- **Tech tags:** `Python`, `CrewAI`, `Gradio`, `Agentic AI`, `Docker`
