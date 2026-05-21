@@ -7,6 +7,17 @@ import gradio as gr
 from dotenv import load_dotenv
 
 from .export_utils import build_download_file
+from .assets import PARKS_IMAGE_DIR, park_collage_paths
+from .theme import (
+    APP_CSS,
+    PARK_THEME,
+    THEME_CHANGE_JS,
+    THEME_DEFAULT_MODE,
+    THEME_HEAD,
+    THEME_INIT_JS,
+    THEME_LOAD_JS,
+    THEME_MODE_CHOICES,
+)
 from .planner_service import (
     DEFAULT_PARK_SCOPE,
     DEMO_MODE_LABEL,
@@ -230,12 +241,34 @@ def build_app() -> gr.Blocks:
         "A valid code authorizes one real run even when REAL_RUNS_ENABLED is false."
     )
 
-    with gr.Blocks(
-        title="National Park Crew Planner",
-        theme=gr.themes.Soft(),
-        css=".gradio-container {max-width: 980px !important; margin: auto !important;}",
-    ) as app:
-        gr.Markdown("# National Park Trip Planner")
+    with gr.Blocks(title="National Park Crew Planner") as app:
+        collage_paths = park_collage_paths()
+        if collage_paths:
+            gr.Gallery(
+                value=collage_paths,
+                columns=min(len(collage_paths), 4),
+                rows=1,
+                height=180,
+                object_fit="cover",
+                interactive=False,
+                allow_preview=False,
+                show_label=False,
+                container=False,
+                elem_id="npc-park-collage",
+            )
+
+        with gr.Row(elem_id="npc-header-row"):
+            gr.Markdown("# National Park Trip Planner", elem_id="npc-title")
+            theme_mode = gr.Radio(
+                choices=THEME_MODE_CHOICES,
+                value=THEME_DEFAULT_MODE,
+                show_label=False,
+                container=False,
+                elem_id="npc-appearance",
+                scale=0,
+                min_width=180,
+            )
+
         gr.Markdown(
             "Plan a multi-agent itinerary with flights, lodging, park activities, and a final report. "
             "This demo is for portfolio evaluation and educational use."
@@ -387,6 +420,20 @@ def build_app() -> gr.Blocks:
             ],
         )
 
+        app.load(None, None, [theme_mode], js=THEME_LOAD_JS, queue=False)
+        theme_mode.change(
+            None,
+            inputs=[theme_mode],
+            js=THEME_CHANGE_JS,
+            queue=False,
+        )
+        theme_mode.input(
+            None,
+            inputs=[theme_mode],
+            js=THEME_CHANGE_JS,
+            queue=False,
+        )
+
     return app
 
 
@@ -394,7 +441,15 @@ def launch() -> None:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
     app = build_app()
     app.queue()
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        theme=PARK_THEME,
+        css=APP_CSS,
+        head=THEME_HEAD,
+        js=THEME_INIT_JS,
+        allowed_paths=[str(PARKS_IMAGE_DIR.resolve())],
+    )
 
 
 if __name__ == "__main__":
