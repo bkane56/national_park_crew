@@ -19,6 +19,7 @@ DEFAULT_PARK_SCOPE = (
 )
 DEMO_MODE_LABEL = "Demo mode - mocked data"
 REAL_MODE_LABEL = "Real planning run - access code required"
+DEMO_FALLBACK_PHASE = "Demo mode - mocked data (fallback)"
 REAL_RUNS_ENABLED_ENV = "REAL_RUNS_ENABLED"
 REAL_RUN_ACCESS_CODE_ENV = "REAL_RUN_ACCESS_CODE"
 
@@ -142,19 +143,39 @@ def _env_flag_enabled(value: str | None) -> bool:
 
 
 def real_runs_enabled(env: Optional[dict[str, str]] = None) -> bool:
+    """Whether REAL_RUNS_ENABLED is set (informational default; not required for access-code runs)."""
     values = os.environ if env is None else env
     return _env_flag_enabled(values.get(REAL_RUNS_ENABLED_ENV))
 
 
-def validate_real_run_access(access_code: str, env: Optional[dict[str, str]] = None) -> None:
+def real_run_access_configured(env: Optional[dict[str, str]] = None) -> bool:
     values = os.environ if env is None else env
-    if not real_runs_enabled(env):
-        raise RealRunAccessError("Real planning runs are currently disabled for this demo.")
+    return bool(values.get(REAL_RUN_ACCESS_CODE_ENV, "").strip())
 
+
+def real_run_access_denial_reason(
+    access_code: str,
+    env: Optional[dict[str, str]] = None,
+) -> str | None:
+    """Return a user-facing denial reason, or None when real runs are authorized.
+
+    A valid access code authorizes a real run for that request only, even when
+    REAL_RUNS_ENABLED is false (the default safe/demo deployment setting).
+    """
+    values = os.environ if env is None else env
     expected_code = values.get(REAL_RUN_ACCESS_CODE_ENV, "")
     submitted_code = access_code.strip()
-    if not expected_code or not submitted_code or not compare_digest(submitted_code, expected_code):
-        raise RealRunAccessError("A valid access code is required for real planning runs.")
+    if not submitted_code:
+        return "Access code is missing — running demo with mocked data instead."
+    if not expected_code or not compare_digest(submitted_code, expected_code):
+        return "Invalid access code — running demo with mocked data instead."
+    return None
+
+
+def validate_real_run_access(access_code: str, env: Optional[dict[str, str]] = None) -> None:
+    denial = real_run_access_denial_reason(access_code, env=env)
+    if denial is not None:
+        raise RealRunAccessError(denial)
 
 
 def load_demo_itinerary() -> str:
@@ -171,12 +192,31 @@ def demo_planner_result() -> PlannerResult:
     )
 
 
-def iter_demo_planner_updates(_request: PlannerRequest) -> Iterator[dict[str, object]]:
+def iter_demo_planner_updates(
+    _request: PlannerRequest,
+    *,
+    fallback_reason: str | None = None,
+) -> Iterator[dict[str, object]]:
+    if fallback_reason:
+        phase = DEMO_FALLBACK_PHASE
+        message = (
+            f"{fallback_reason} Returning mocked itinerary data. "
+            "No live AI, web search, or paid API calls are made."
+        )
+        logs = (
+            f"Real run requested but access denied: {fallback_reason} "
+            "Demo mode: mocked itinerary data returned from packaged sample content."
+        )
+    else:
+        phase = DEMO_MODE_LABEL
+        message = "Returning mocked itinerary data. No live AI, web search, or paid API calls are made."
+        logs = "Demo mode: mocked itinerary data returned from packaged sample content."
+
     yield {
-        "phase": "Demo mode - mocked data",
-        "message": "Returning mocked itinerary data. No live AI, web search, or paid API calls are made.",
+        "phase": phase,
+        "message": message,
         "elapsed_seconds": 0,
-        "logs": "Demo mode: mocked itinerary data returned from packaged sample content.",
+        "logs": logs,
         "done": True,
         "result": demo_planner_result(),
     }
@@ -321,7 +361,10 @@ def iter_planner_updates_for_mode(
     env: Optional[dict[str, str]] = None,
 ) -> Iterator[dict[str, object]]:
     if run_mode == REAL_MODE_LABEL:
-        validate_real_run_access(access_code, env=env)
+        denial = real_run_access_denial_reason(access_code, env=env)
+        if denial is not None:
+            yield from iter_demo_planner_updates(request, fallback_reason=denial)
+            return
         yield from iter_planner_updates(
             request,
             poll_seconds=poll_seconds,

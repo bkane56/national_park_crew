@@ -1973,6 +1973,7 @@ source = { editable = "." }
 dependencies = [
     { name = "crewai", extra = ["tools"] },
     { name = "gradio" },
+    { name = "python-dotenv" },
     { name = "reportlab" },
 ]
 
@@ -1986,6 +1987,7 @@ dev = [
 requires-dist = [
     { name = "crewai", extras = ["tools"], specifier = "==1.7.1" },
     { name = "gradio", specifier = ">=5.29.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "reportlab", specifier = ">=4.2.0" },
 ]
 

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from national_park_crew.planner_service import (
+    DEMO_FALLBACK_PHASE,
     DEMO_MODE_LABEL,
     REAL_MODE_LABEL,
     PlannerInputError,
@@ -17,8 +18,10 @@ from national_park_crew.planner_service import (
     itinerary_download_stem,
     iter_planner_updates,
     parse_iso_date,
+    real_run_access_denial_reason,
     run_planner,
     slugify_location,
+    validate_real_run_access,
 )
 
 
@@ -195,32 +198,80 @@ def test_demo_mode_returns_mocked_itinerary_without_calling_crew() -> None:
     assert "MOCKED DEMO DATA" in updates[-1]["result"].markdown
 
 
-def test_real_mode_rejects_missing_or_invalid_access_code() -> None:
+def test_real_mode_falls_back_to_mock_on_invalid_access_code() -> None:
+    def fail_if_called() -> DummyNationalParkCrew:
+        raise AssertionError("Invalid access code must not invoke the paid CrewAI workflow")
+
+    updates = list(
+        iter_planner_updates_for_mode(
+            sample_request(),
+            run_mode=REAL_MODE_LABEL,
+            access_code="wrong",
+            poll_seconds=0.01,
+            crew_factory=fail_if_called,
+            env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
+        )
+    )
+
+    assert updates[-1]["done"] is True
+    assert updates[-1]["phase"] == DEMO_FALLBACK_PHASE
+    assert "Invalid access code" in str(updates[-1]["message"])
+    assert "MOCKED DEMO DATA" in updates[-1]["result"].markdown
+
+
+def test_real_mode_falls_back_to_mock_on_missing_access_code() -> None:
+    def fail_if_called() -> DummyNationalParkCrew:
+        raise AssertionError("Missing access code must not invoke the paid CrewAI workflow")
+
+    updates = list(
+        iter_planner_updates_for_mode(
+            sample_request(),
+            run_mode=REAL_MODE_LABEL,
+            access_code="",
+            poll_seconds=0.01,
+            crew_factory=fail_if_called,
+            env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
+        )
+    )
+
+    assert updates[-1]["done"] is True
+    assert updates[-1]["phase"] == DEMO_FALLBACK_PHASE
+    assert "Access code is missing" in str(updates[-1]["message"])
+    assert "MOCKED DEMO DATA" in updates[-1]["result"].markdown
+
+
+def test_real_mode_allows_valid_access_code_when_feature_flag_disabled() -> None:
+    updates = list(
+        iter_planner_updates_for_mode(
+            sample_request(),
+            run_mode=REAL_MODE_LABEL,
+            access_code="secret",
+            poll_seconds=0.01,
+            crew_factory=lambda: DummyNationalParkCrew(result="real run"),
+            env={"REAL_RUNS_ENABLED": "false", "REAL_RUN_ACCESS_CODE": "secret"},
+        )
+    )
+
+    assert updates[-1]["done"] is True
+    assert updates[-1]["result"].markdown == "real run"
+
+
+def test_validate_real_run_access_still_raises_for_strict_callers() -> None:
     with pytest.raises(RealRunAccessError):
-        list(
-            iter_planner_updates_for_mode(
-                sample_request(),
-                run_mode=REAL_MODE_LABEL,
-                access_code="wrong",
-                poll_seconds=0.01,
-                crew_factory=lambda: DummyNationalParkCrew(result="should not run"),
-                env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
-            )
+        validate_real_run_access(
+            "wrong",
+            env={"REAL_RUNS_ENABLED": "true", "REAL_RUN_ACCESS_CODE": "secret"},
         )
 
 
-def test_real_mode_requires_feature_flag_even_with_valid_access_code() -> None:
-    with pytest.raises(RealRunAccessError):
-        list(
-            iter_planner_updates_for_mode(
-                sample_request(),
-                run_mode=REAL_MODE_LABEL,
-                access_code="secret",
-                poll_seconds=0.01,
-                crew_factory=lambda: DummyNationalParkCrew(result="should not run"),
-                env={"REAL_RUNS_ENABLED": "false", "REAL_RUN_ACCESS_CODE": "secret"},
-            )
+def test_real_run_access_denial_reason_returns_none_for_valid_code() -> None:
+    assert (
+        real_run_access_denial_reason(
+            "secret",
+            env={"REAL_RUNS_ENABLED": "false", "REAL_RUN_ACCESS_CODE": "secret"},
         )
+        is None
+    )
 
 
 def test_real_mode_allows_valid_access_code() -> None:

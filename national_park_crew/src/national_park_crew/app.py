@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from pathlib import Path
 import re
 import gradio as gr
+from dotenv import load_dotenv
 
 from .export_utils import build_download_file
 from .planner_service import (
@@ -12,6 +14,7 @@ from .planner_service import (
     PlannerRequest,
     PlannerRuntimeError,
     REAL_MODE_LABEL,
+    real_run_access_configured,
     iter_planner_updates_for_mode,
     itinerary_download_stem,
 )
@@ -221,6 +224,12 @@ def example_trip_summary() -> str:
 
 def build_app() -> gr.Blocks:
     departure_default, return_default = default_dates()
+    access_code_configured = real_run_access_configured()
+    run_mode_info = (
+        "Demo mode returns mocked UI data. Real mode requires a private access code and may use paid API calls. "
+        "A valid code authorizes one real run even when REAL_RUNS_ENABLED is false."
+    )
+
     with gr.Blocks(
         title="National Park Crew Planner",
         theme=gr.themes.Soft(),
@@ -233,8 +242,18 @@ def build_app() -> gr.Blocks:
         )
         gr.Markdown(
             "**Public demo mode uses mocked itinerary data.** It does not run live AI, web search, "
-            "or paid API calls. Real CrewAI planning runs require an access code from the project owner."
+            "or paid API calls. Real CrewAI planning runs require a private access code from the project owner."
         )
+        if access_code_configured:
+            gr.Markdown(
+                "**Real planning runs are available with a private access code.** "
+                "Leave demo mode selected for mocked data, or choose real mode and enter the code for a one-time live run."
+            )
+        else:
+            gr.Markdown(
+                "**Real planning runs are not configured on this deployment** "
+                "(set REAL_RUN_ACCESS_CODE in secrets). Real mode without a valid code returns mocked demo data."
+            )
         gr.Markdown(
             "**Runtime note:** CrewAI runs can take several minutes depending on research/tool calls. "
             "Recent runs have taken up to ~8 min 30 sec."
@@ -265,13 +284,16 @@ def build_app() -> gr.Blocks:
             choices=[DEMO_MODE_LABEL, REAL_MODE_LABEL],
             value=DEMO_MODE_LABEL,
             label="Run mode",
-            info="Demo mode returns mocked UI data. Real mode requires a private access code and may use paid API calls.",
+            info=run_mode_info,
         )
         access_code = gr.Textbox(
             label="Access code for real planning runs",
             type="password",
-            placeholder="Leave blank for public mocked demo mode",
-            info="Only needed when selecting the real planning run mode.",
+            placeholder="Enter the same code as REAL_RUN_ACCESS_CODE in .env",
+            info=(
+                "Required when selecting real mode. The .env value is the expected code on the server; "
+                "you must type it here (it is not applied automatically)."
+            ),
         )
 
         with gr.Accordion("Power User Options", open=False):
@@ -369,6 +391,7 @@ def build_app() -> gr.Blocks:
 
 
 def launch() -> None:
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
     app = build_app()
     app.queue()
     app.launch(server_name="0.0.0.0", server_port=7860)

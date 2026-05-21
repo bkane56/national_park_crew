@@ -28,7 +28,8 @@ flowchart LR
   ui --> mode{Run mode}
   mode -->|Demo mode| mock[Packaged mocked itinerary]
   mode -->|Real mode| gate[Access code check]
-  gate -->|Invalid or disabled| blocked[No paid workflow invoked]
+  gate -->|Invalid or disabled| fallback[Mock demo with notice]
+  fallback --> export
   gate -->|Valid| crew[CrewAI sequential crew]
   crew --> agents[Research and writer agents]
   agents --> tools[Website search and scrape tools]
@@ -37,7 +38,7 @@ flowchart LR
   crew --> export
 ```
 
-The important safety boundary is in `planner_service.py`: demo mode returns packaged sample content immediately, while real mode validates `REAL_RUNS_ENABLED` and `REAL_RUN_ACCESS_CODE` before the CrewAI workflow can start.
+The important safety boundary is in `planner_service.py`: demo mode returns packaged sample content immediately. Real mode checks `REAL_RUN_ACCESS_CODE` from the UI against the server secret. A valid code authorizes one real run for that request only, even when `REAL_RUNS_ENABLED` is false. Missing or invalid codes fall back to mocked demo data without invoking paid APIs.
 
 ## Project Structure
 
@@ -90,15 +91,33 @@ cp .env.example .env
 Required for real runs:
 
 - `OPENAI_API_KEY`: OpenAI key used by CrewAI agents.
-- `REAL_RUNS_ENABLED=true`: Enables authorized real runs.
-- `REAL_RUN_ACCESS_CODE`: Private code entered in the UI to unlock real execution.
+- `REAL_RUN_ACCESS_CODE`: Private code entered in the UI to unlock a one-time real execution.
+
+Recommended deployment default:
+
+- `REAL_RUNS_ENABLED=false`: Marks the deployment as demo-first. Does **not** block real runs when a valid access code is supplied.
 
 Optional operational toggles:
 
 - `CREWAI_DISABLE_TELEMETRY=true`
 - `OTEL_SDK_DISABLED=true`
 
-If `REAL_RUNS_ENABLED` is false or the access code is missing/incorrect, the app refuses the real run before invoking CrewAI or paid APIs.
+If the access code is missing or incorrect, the app **falls back to mocked demo data** with a notice in the status panel. CrewAI and paid APIs are never invoked in that case.
+
+The UI loads `national_park_crew/.env` automatically on startup for local development.
+
+### Sharing with recruiters or trusted reviewers
+
+1. Deploy the app (for example, a Hugging Face Space) with these secrets configured.
+2. Share the live demo URL publicly on your portfolio.
+3. Send the private `REAL_RUN_ACCESS_CODE` out of band (email or DM — never commit it).
+4. Tell the reviewer to select **Real planning run - access code required**, paste the code, and click **Generate Itinerary**.
+
+Public visitors who leave demo mode selected, or who select real mode without a valid code, always get the mocked itinerary.
+
+### Kill switch
+
+Remove or unset `REAL_RUN_ACCESS_CODE` on the deployment. Real mode will always fall back to mock data because no code can validate.
 
 ## Test
 

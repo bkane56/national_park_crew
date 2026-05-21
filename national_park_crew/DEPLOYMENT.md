@@ -18,8 +18,8 @@ This project is designed for a recruiter-facing demo with a safe mocked public m
 ## Environment variables
 
 - `OPENAI_API_KEY`: required only for real CrewAI runs.
-- `REAL_RUNS_ENABLED`: set to `true` only when you want access-code-gated real runs available.
-- `REAL_RUN_ACCESS_CODE`: private code trusted reviewers can enter in the UI.
+- `REAL_RUNS_ENABLED`: optional demo-first default flag (`false` recommended). Does not block real runs when a valid access code is entered.
+- `REAL_RUN_ACCESS_CODE`: private code trusted reviewers enter in the UI for a one-time real run.
 - Any additional provider keys used by CrewAI tools.
 
 Store these as Hugging Face Secrets. Do not commit `.env` files or secrets to source control.
