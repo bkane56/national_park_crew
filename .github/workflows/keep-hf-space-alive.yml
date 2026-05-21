@@ -4,9 +4,15 @@ name: Keep HF Space alive
 
 on:
   schedule:
-    # Every 12 hours (UTC) — well under HF's ~48h free-tier sleep window
+    # Every 12 hours (UTC) on default branch (main) — under HF's ~48h sleep window
     - cron: "0 */12 * * *"
   workflow_dispatch:
+  # Run once when the workflow is added or changed (scheduled runs can take hours to start)
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/keep-hf-space-alive.yml
 
 jobs:
   ping:
