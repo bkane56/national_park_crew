@@ -322,7 +322,7 @@ def build_app() -> gr.Blocks:
         access_code = gr.Textbox(
             label="Access code for real planning runs",
             type="password",
-            placeholder="Enter the same code as REAL_RUN_ACCESS_CODE in .env",
+            placeholder="Enter the private access code from the project owner",
             info=(
                 "Required when selecting real mode. The .env value is the expected code on the server; "
                 "you must type it here (it is not applied automatically)."
