@@ -7,7 +7,6 @@ on:
     # Every 12 hours (UTC) on default branch (main) — under HF's ~48h sleep window
     - cron: "0 */12 * * *"
   workflow_dispatch:
-  # Run once when the workflow is added or changed (scheduled runs can take hours to start)
   push:
     branches:
       - main
@@ -18,9 +17,9 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Space app (wakes Gradio runtime)
+      - name: Ping Hugging Face Space
         env:
-          HF_SPACE_APP_URL: https://bkane56-national-park-trip-planner.hf.space
+          HF_SPACE_URL: https://huggingface.co/spaces/Bkane56/national-park-trip-planner
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
         run: |
           set -euo pipefail
@@ -28,11 +27,18 @@ jobs:
           if [ -n "${HF_API_TOKEN:-}" ]; then
             auth_args=(-H "Authorization: Bearer ${HF_API_TOKEN}")
           fi
-          code=$(curl -fsS -o /dev/null -w "%{http_code}" -L --max-time 120 \
+          # Do not use curl -f: we need the HTTP status even on 401/404
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -L --max-time 120 \
             "${auth_args[@]}" \
-            "$HF_SPACE_APP_URL" 2>/dev/null || echo "000")
-          echo "HTTP $code from $HF_SPACE_APP_URL"
+            "$HF_SPACE_URL" || echo "000")
+          echo "HTTP $code from $HF_SPACE_URL"
           case "$code" in
-            200|301|302|303|307|308) exit 0 ;;
-            *) echo "Unexpected status; Space may be private, building, or down." >&2; exit 1 ;;
+            200|301|302|303|307|308|401|403)
+              echo "Space responded (ok for keep-alive ping)."
+              exit 0
+              ;;
+            *)
+              echo "Unexpected status. If the Space is private, add HF_API_TOKEN in repo secrets." >&2
+              exit 1
+              ;;
           esac
