@@ -1,0 +1,32 @@
+# Keeps the free Hugging Face Space awake by pinging it before the ~48h inactivity sleep.
+# Portfolio tile URL: https://huggingface.co/spaces/Bkane56/national-park-trip-planner
+name: Keep HF Space alive
+
+on:
+  schedule:
+    # Every 12 hours (UTC) — well under HF's ~48h free-tier sleep window
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Space app (wakes Gradio runtime)
+        env:
+          HF_SPACE_APP_URL: https://bkane56-national-park-trip-planner.hf.space
+          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth_args=()
+          if [ -n "${HF_API_TOKEN:-}" ]; then
+            auth_args=(-H "Authorization: Bearer ${HF_API_TOKEN}")
+          fi
+          code=$(curl -fsS -o /dev/null -w "%{http_code}" -L --max-time 120 \
+            "${auth_args[@]}" \
+            "$HF_SPACE_APP_URL" 2>/dev/null || echo "000")
+          echo "HTTP $code from $HF_SPACE_APP_URL"
+          case "$code" in
+            200|301|302|303|307|308) exit 0 ;;
+            *) echo "Unexpected status; Space may be private, building, or down." >&2; exit 1 ;;
+          esac
