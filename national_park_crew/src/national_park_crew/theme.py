@@ -135,7 +135,7 @@ PARK_THEME.custom_css = f"""
     min-width: 0 !important;
     flex: 1 1 100% !important;
   }}
-}
+}}
 #npc-park-collage {{
   margin-bottom: 0.75rem !important;
 }}
