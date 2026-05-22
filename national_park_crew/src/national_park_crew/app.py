@@ -242,7 +242,13 @@ def build_app() -> gr.Blocks:
         "A valid code authorizes one real run even when REAL_RUNS_ENABLED is false."
     )
 
-    with gr.Blocks(title="National Park Crew Planner") as app:
+    with gr.Blocks(
+        title="National Park Crew Planner",
+        theme=PARK_THEME,
+        css=APP_CSS,
+        head=THEME_HEAD,
+        js=THEME_INIT_JS,
+    ) as app:
         collage_paths = park_collage_paths()
         if collage_paths:
             gr.Gallery(
@@ -442,17 +448,16 @@ def launch() -> None:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
     app = build_app()
     app.queue()
+    supported_launch_params = inspect.signature(app.launch).parameters
     launch_kwargs = {
-        "server_name": "0.0.0.0",
-        "server_port": 7860,
-        "css": APP_CSS,
-        "head": THEME_HEAD,
-        "js": THEME_INIT_JS,
-        "allowed_paths": [str(PARKS_IMAGE_DIR.resolve())],
+        key: value
+        for key, value in {
+            "server_name": "0.0.0.0",
+            "server_port": 7860,
+            "allowed_paths": [str(PARKS_IMAGE_DIR.resolve())],
+        }.items()
+        if key in supported_launch_params
     }
-    # Gradio changed where theme is accepted across major versions.
-    if "theme" in inspect.signature(app.launch).parameters:
-        launch_kwargs["theme"] = PARK_THEME
     app.launch(**launch_kwargs)
 
 
