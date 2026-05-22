@@ -12,8 +12,18 @@ This project is designed for a recruiter-facing demo with a safe mocked public m
 
 1. Create a Hugging Face Space.
 2. Select **Docker** as the Space SDK.
-3. Push a Space repo containing the root `app.py`, `requirements.txt`, `Dockerfile`, and this package's `src/` tree.
-4. Set the Space to public only after confirming demo mode returns mocked data by default.
+3. Keep this GitHub repo as the single source of truth for deploys.
+4. Let GitHub Actions publish Space artifacts (`app.py`, `requirements.txt`, `Dockerfile`, and `src/` tree) to the Hugging Face Space.
+5. Set the Space to public only after confirming demo mode returns mocked data by default.
+
+## CI/CD deployment flow
+
+- Workflow: `.github/workflows/deploy-hf-space.yml`
+- Trigger: push to `develop` (and manual dispatch)
+- Behavior: builds a clean deploy directory and uploads it to `Bkane56/national-park-trip-planner` with `hf upload ... --delete="*"`
+- Auth: GitHub secret `HF_TOKEN` (token must have write access to the Space)
+
+The keep-alive workflow is intentionally separate and does not deploy code.
 
 ## Environment variables
 

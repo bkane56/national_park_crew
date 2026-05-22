@@ -5,10 +5,16 @@ from pathlib import Path
 from national_park_crew.assets import PARKS_IMAGE_DIR, list_park_images, park_collage_paths
 
 
-def test_list_park_images_empty_when_no_files() -> None:
+def test_list_park_images_reflects_current_assets_directory() -> None:
     assert PARKS_IMAGE_DIR.is_dir()
-    assert list_park_images() == []
-    assert park_collage_paths() == []
+    images = list_park_images()
+    collage = park_collage_paths()
+
+    assert len(collage) == len(images)
+    for image_path, collage_path in zip(images, collage, strict=True):
+        assert image_path.is_file()
+        assert image_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        assert Path(collage_path).resolve() == image_path.resolve()
 
 
 def test_list_park_images_finds_supported_files(tmp_path: Path, monkeypatch) -> None:
