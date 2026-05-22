@@ -26,19 +26,19 @@ A portfolio-grade AI trip planner that uses a CrewAI multi-agent workflow to res
 ## Architecture
 
 ```mermaid
-flowchart LR
-  user[Visitor] --> ui[Gradio UI]
-  ui --> mode{Run mode}
-  mode -->|Demo mode| mock[Packaged mocked itinerary]
-  mode -->|Real mode| gate[Access code check]
-  gate -->|Invalid or disabled| fallback[Mock demo with notice]
-  fallback --> export
-  gate -->|Valid| crew[CrewAI sequential crew]
-  crew --> agents[Research and writer agents]
-  agents --> tools[Website search and scrape tools]
-  agents --> llm[OpenAI model]
-  mock --> export[Markdown or PDF download]
-  crew --> export
+flowchart TD
+  user["Visitor"] --> ui["Gradio UI"]
+  ui --> mode{"Run mode"}
+  mode -->|"Demo mode"| mock["Packaged mocked itinerary"]
+  mode -->|"Real mode"| gate["Access code check"]
+  gate -->|"Invalid or disabled"| fallback["Mock demo with notice"]
+  gate -->|"Valid"| crew["CrewAI sequential crew"]
+  crew --> agents["Research and writer agents"]
+  agents --> tools["Website search and scrape tools"]
+  agents --> llm["OpenAI model"]
+  mock --> exportNode["Markdown or PDF download"]
+  fallback --> exportNode
+  crew --> exportNode
 ```
 
 The important safety boundary is in `planner_service.py`: demo mode returns packaged sample content immediately. Real mode checks `REAL_RUN_ACCESS_CODE` from the UI against the server secret. A valid code authorizes one real run for that request only, even when `REAL_RUNS_ENABLED` is false. Missing or invalid codes fall back to mocked demo data without invoking paid APIs.
