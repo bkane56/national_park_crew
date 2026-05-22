@@ -1,4 +1,5 @@
 # Keeps the free Hugging Face Space awake by pinging it before the ~48h inactivity sleep.
+# Note: this workflow does NOT deploy code updates to Hugging Face.
 # Portfolio tile URL: https://huggingface.co/spaces/Bkane56/national-park-trip-planner
 name: Keep HF Space alive
 

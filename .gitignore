@@ -14,3 +14,6 @@ national_park_crew/itinerary/
 
 # Local product/UI notes — not published to GitHub
 UI_REQUIREMENTS.md
+
+# Legacy local clone of the HF Space repo (do not use as source of truth)
+national-park-trip-planner/

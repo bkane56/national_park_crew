@@ -1,0 +1,65 @@
+name: Deploy HF Space
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SPACE_REPO: Bkane56/national-park-trip-planner
+      DEPLOY_DIR: .hf-space-deploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Hugging Face CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          pip install "huggingface_hub[cli]>=0.36.0"
+
+      - name: Run test suite before deploy
+        run: |
+          set -euo pipefail
+          uv run --project national_park_crew --group dev pytest
+
+      - name: Build deploy bundle
+        run: |
+          set -euo pipefail
+          rm -rf "$DEPLOY_DIR"
+          mkdir -p "$DEPLOY_DIR"
+
+          cp app.py Dockerfile requirements.txt "$DEPLOY_DIR/"
+          cp .github/hf-space/README.md "$DEPLOY_DIR/README.md"
+
+          cp -R national_park_crew/src "$DEPLOY_DIR/src"
+          cp -R national_park_crew/assets "$DEPLOY_DIR/assets"
+
+          echo "Deploy bundle contents:"
+          ls -la "$DEPLOY_DIR"
+
+      - name: Upload deploy bundle to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "Missing required GitHub secret: HF_TOKEN" >&2
+            exit 1
+          fi
+
+          hf upload "$SPACE_REPO" "$DEPLOY_DIR" . \
+            --repo-type space \
+            --token "$HF_TOKEN" \
+            --delete="*" \
+            --commit-message "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"

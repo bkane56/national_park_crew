@@ -132,12 +132,29 @@ The tests cover request validation, mocked demo mode, real-run access gating, st
 
 The app is designed for a Gradio-based portfolio demo. Hugging Face Spaces is the preferred public demo host, but this project uses a **Docker Space** rather than the default Gradio SDK so dependency versions stay under project control.
 
+Deployment behavior in this repo is split intentionally:
+
+- `keep-hf-space-alive` pings the Space URL to reduce idle sleep on free tiers.
+- `deploy-hf-space` publishes code updates to the Space.
+
+If the Space is running but not reflecting recent GitHub commits, the deploy workflow or deploy token is the first place to check.
+
 Recommended public setup:
 
 - Link the Hugging Face Space as the **Live Demo**.
 - Link this GitHub repository as **View Code**.
 - Run the public Space in demo mode by default.
 - Store `OPENAI_API_KEY`, `REAL_RUNS_ENABLED`, and `REAL_RUN_ACCESS_CODE` as Hugging Face Secrets, not in source control.
+
+### Hugging Face deploy pipeline (single source of truth)
+
+This repository is the source of truth for Space updates. Pushes to `develop` trigger `deploy-hf-space`, which uploads a clean Docker Space bundle to:
+
+- `Bkane56/national-park-trip-planner`
+
+Required GitHub repository secret:
+
+- `HF_TOKEN`: Hugging Face User Access Token with write access to the Space repo.
 
 See `national_park_crew/DEPLOYMENT.md` for additional deployment context.
 
