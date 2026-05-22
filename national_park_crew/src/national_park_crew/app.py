@@ -234,6 +234,11 @@ def example_trip_summary() -> str:
     )
 
 
+def access_code_visibility_update(run_mode: str):
+    """Show access code field only for real planning runs."""
+    return gr.update(visible=run_mode == REAL_MODE_LABEL)
+
+
 def build_app() -> gr.Blocks:
     departure_default, return_default = default_dates()
     access_code_configured = real_run_access_configured()
@@ -330,6 +335,7 @@ def build_app() -> gr.Blocks:
             label="Access code for real planning runs",
             type="password",
             placeholder="Enter the private access code from the project owner",
+            visible=False,
             info=(
                 "Required when selecting real mode. The .env value is the expected code on the server; "
                 "you must type it here (it is not applied automatically)."
@@ -388,6 +394,12 @@ def build_app() -> gr.Blocks:
             inputs=[itinerary_payload, download_format],
             outputs=[download_output],
         )
+        run_mode.change(
+            access_code_visibility_update,
+            inputs=[run_mode],
+            outputs=[access_code],
+            queue=False,
+        )
 
         reset_button.click(
             lambda: [
@@ -397,7 +409,7 @@ def build_app() -> gr.Blocks:
                 example_trip_summary(),
                 DEFAULT_PARK_SCOPE,
                 DEMO_MODE_LABEL,
-                "",
+                gr.update(value="", visible=False),
                 "",
                 "",
                 FORMAT_MARKDOWN,
@@ -427,6 +439,12 @@ def build_app() -> gr.Blocks:
             ],
         )
 
+        app.load(
+            access_code_visibility_update,
+            inputs=[run_mode],
+            outputs=[access_code],
+            queue=False,
+        )
         app.load(None, None, [theme_mode], js=THEME_LOAD_JS, queue=False)
         theme_mode.change(
             None,

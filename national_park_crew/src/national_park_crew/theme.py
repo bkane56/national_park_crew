@@ -62,8 +62,9 @@ PARK_THEME.custom_css = f"""
 #npc-header-row {{
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 1rem !important;
-  margin-bottom: 0.5rem !important;
+  gap: 0.85rem !important;
+  margin-bottom: 0.65rem !important;
+  flex-wrap: wrap !important;
 }}
 #npc-title {{ flex: 1 1 auto !important; min-width: 0 !important; }}
 #npc-title .prose {{ margin: 0 !important; }}
@@ -71,13 +72,43 @@ PARK_THEME.custom_css = f"""
   flex: 0 0 auto !important;
   margin: 0 !important;
   padding: 0 !important;
+  min-width: 230px !important;
 }}
 #npc-appearance .wrap {{
-  gap: 0.35rem !important;
+  display: inline-flex !important;
+  gap: 0.15rem !important;
+  padding: 0.2rem !important;
+  border: 1px solid var(--block-border-color) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--block-background-fill) 92%, var(--body-background-fill) 8%) !important;
 }}
 #npc-appearance label {{
-  font-size: 0.85rem !important;
-  padding: 0.2rem 0.45rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  padding: 0.28rem 0.65rem !important;
+  border-radius: 999px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  line-height: 1.2 !important;
+}}
+#npc-appearance label.selected,
+#npc-appearance label:has(input:checked) {{
+  color: var(--button-primary-text-color, #ffffff) !important;
+  background: var(--button-primary-background-fill) !important;
+}}
+#npc-appearance label:not(.selected),
+#npc-appearance label:has(input:not(:checked)) {{
+  color: var(--body-text-color) !important;
+  background: transparent !important;
+}}
+@media (max-width: 700px) {{
+  #npc-appearance {{
+    min-width: 100% !important;
+  }}
+  #npc-appearance .wrap {{
+    width: 100% !important;
+    justify-content: center !important;
+  }}
 }}
 #npc-park-collage {{
   margin-bottom: 0.75rem !important;
@@ -107,7 +138,11 @@ _LIGHT_CSS_VARS = f"""
 """
 
 APP_CSS = f"""
-.gradio-container {{ max-width: 980px !important; margin: auto !important; }}
+.gradio-container {{
+  width: min(1200px, calc(100% - 2rem)) !important;
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+}}
 
 html[data-npc-theme="light"] {{
   color-scheme: light;
