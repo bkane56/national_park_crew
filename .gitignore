@@ -1,13 +1,42 @@
+# Environment and local secrets
 .env
+.env.*
 **/.env
+**/.env.*
 !.env.example
-national_park_crew/.env
+!.env.sample
+!**/.env.example
+!**/.env.sample
+
+# Python virtual environments
 .venv/
+venv/
+**/.venv/
+**/venv/
+
+# Python caches and test artifacts
 __pycache__/
-.DS_Store
-.coverage
-htmlcov/
+**/__pycache__/
+*.py[cod]
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+.ipynb_checkpoints/
 
 # Generated itinerary artifacts from development runs
 national_park_crew/itinerary/
