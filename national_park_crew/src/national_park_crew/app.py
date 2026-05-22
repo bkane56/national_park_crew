@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+import inspect
 import re
 import gradio as gr
 from dotenv import load_dotenv
@@ -441,15 +442,18 @@ def launch() -> None:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
     app = build_app()
     app.queue()
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        theme=PARK_THEME,
-        css=APP_CSS,
-        head=THEME_HEAD,
-        js=THEME_INIT_JS,
-        allowed_paths=[str(PARKS_IMAGE_DIR.resolve())],
-    )
+    launch_kwargs = {
+        "server_name": "0.0.0.0",
+        "server_port": 7860,
+        "css": APP_CSS,
+        "head": THEME_HEAD,
+        "js": THEME_INIT_JS,
+        "allowed_paths": [str(PARKS_IMAGE_DIR.resolve())],
+    }
+    # Gradio changed where theme is accepted across major versions.
+    if "theme" in inspect.signature(app.launch).parameters:
+        launch_kwargs["theme"] = PARK_THEME
+    app.launch(**launch_kwargs)
 
 
 if __name__ == "__main__":
