@@ -62,8 +62,8 @@ PARK_THEME.custom_css = f"""
 #npc-header-row {{
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 0.85rem !important;
-  margin-bottom: 0.65rem !important;
+  gap: 1rem !important;
+  margin-bottom: 0.75rem !important;
   flex-wrap: wrap !important;
 }}
 #npc-title {{ flex: 1 1 auto !important; min-width: 0 !important; }}
@@ -72,36 +72,43 @@ PARK_THEME.custom_css = f"""
   flex: 0 0 auto !important;
   margin: 0 !important;
   padding: 0 !important;
-  min-width: 230px !important;
+  min-width: 248px !important;
 }}
 #npc-appearance .wrap {{
   display: inline-flex !important;
-  gap: 0.15rem !important;
-  padding: 0.2rem !important;
-  border: 1px solid var(--block-border-color) !important;
+  gap: 0 !important;
+  padding: 0.14rem !important;
+  border: 1px solid color-mix(in srgb, var(--block-border-color) 86%, transparent) !important;
   border-radius: 999px !important;
-  background: color-mix(in srgb, var(--block-background-fill) 92%, var(--body-background-fill) 8%) !important;
+  background: color-mix(in srgb, var(--block-background-fill) 94%, var(--body-background-fill) 6%) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--body-background-fill) 40%, transparent) !important;
 }}
 #npc-appearance label {{
-  font-size: 0.82rem !important;
+  font-size: 0.79rem !important;
   font-weight: 600 !important;
-  padding: 0.28rem 0.65rem !important;
+  padding: 0.36rem 0.86rem !important;
   border-radius: 999px !important;
   margin: 0 !important;
   border: 0 !important;
-  line-height: 1.2 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.01em !important;
+  transition: background-color 0.16s ease, color 0.16s ease !important;
 }}
 #npc-appearance label.selected,
 #npc-appearance label:has(input:checked) {{
   color: var(--button-primary-text-color, #ffffff) !important;
   background: var(--button-primary-background-fill) !important;
+  box-shadow: 0 1px 3px color-mix(in srgb, #000000 20%, transparent) !important;
 }}
 #npc-appearance label:not(.selected),
 #npc-appearance label:has(input:not(:checked)) {{
-  color: var(--body-text-color) !important;
+  color: color-mix(in srgb, var(--body-text-color) 90%, transparent) !important;
   background: transparent !important;
 }}
-@media (max-width: 700px) {{
+#npc-appearance label:not(.selected):hover {{
+  background: color-mix(in srgb, var(--block-background-fill) 75%, var(--body-background-fill) 25%) !important;
+}}
+@media (max-width: 860px) {{
   #npc-appearance {{
     min-width: 100% !important;
   }}
@@ -110,6 +117,25 @@ PARK_THEME.custom_css = f"""
     justify-content: center !important;
   }}
 }}
+@media (max-width: 900px) {{
+  .gradio-container {{
+    overflow-x: hidden !important;
+  }}
+  #npc-locations-row,
+  #npc-dates-row,
+  #npc-power-user-row,
+  #npc-actions-row {{
+    flex-wrap: wrap !important;
+    gap: 0.65rem !important;
+  }}
+  #npc-locations-row > *,
+  #npc-dates-row > *,
+  #npc-power-user-row > *,
+  #npc-actions-row > * {{
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }}
+}
 #npc-park-collage {{
   margin-bottom: 0.75rem !important;
 }}
@@ -139,9 +165,14 @@ _LIGHT_CSS_VARS = f"""
 
 APP_CSS = f"""
 .gradio-container {{
-  width: min(1200px, calc(100% - 2rem)) !important;
-  max-width: 1200px !important;
+  width: min(1400px, calc(100% - 2.5rem)) !important;
+  max-width: 1400px !important;
   margin: 0 auto !important;
+}}
+@media (max-width: 900px) {{
+  .gradio-container {{
+    width: calc(100% - 1.25rem) !important;
+  }}
 }}
 
 html[data-npc-theme="light"] {{

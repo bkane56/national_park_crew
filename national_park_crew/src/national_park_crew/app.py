@@ -278,7 +278,7 @@ def build_app() -> gr.Blocks:
                 container=False,
                 elem_id="npc-appearance",
                 scale=0,
-                min_width=180,
+                min_width=248,
             )
 
         gr.Markdown(
@@ -307,10 +307,10 @@ def build_app() -> gr.Blocks:
             "_Outputs are AI-generated and may be incorrect or outdated. Always verify prices, schedules, and availability._"
         )
 
-        with gr.Row():
+        with gr.Row(elem_id="npc-locations-row"):
             from_location = gr.Textbox(label="From (City, State)", value=EXAMPLE_FROM)
             to_location = gr.Textbox(label="To (Destination Region)", value=EXAMPLE_TO)
-        with gr.Row():
+        with gr.Row(elem_id="npc-dates-row"):
             departure_date = gr.Textbox(label="Departure Date (YYYY-MM-DD)", value=departure_default)
             return_date = gr.Textbox(label="Return Date (YYYY-MM-DD)", value=return_default)
         trip_summary = gr.Textbox(
@@ -343,7 +343,7 @@ def build_app() -> gr.Blocks:
         )
 
         with gr.Accordion("Power User Options", open=False):
-            with gr.Row():
+            with gr.Row(elem_id="npc-power-user-row"):
                 departure_slug = gr.Textbox(
                     label="Departure airport key (optional)",
                     placeholder="Florida_Gulf_Coast",
@@ -355,7 +355,7 @@ def build_app() -> gr.Blocks:
                     info="Optional. Used for the suggested download filename stem (not written to the repo).",
                 )
 
-        with gr.Row():
+        with gr.Row(elem_id="npc-actions-row"):
             run_button = gr.Button("Generate Itinerary", variant="primary")
             reset_button = gr.Button("Reset Example")
 

@@ -15,7 +15,7 @@ def test_park_theme_is_customized_base_theme() -> None:
     assert THEME_MODE_CHOICES == ["Light", "Dark", "System"]
     assert THEME_DEFAULT_MODE == "Light"
     assert THEME_STORAGE_KEY == "npc-theme"
-    assert "max-width: 1200px" in APP_CSS
+    assert "max-width: 1400px" in APP_CSS
     assert 'data-npc-theme="light"' in APP_CSS
 
 
