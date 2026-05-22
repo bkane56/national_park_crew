@@ -19,11 +19,12 @@ This project is designed for a recruiter-facing demo with a safe mocked public m
 ## CI/CD deployment flow
 
 - Workflow: `.github/workflows/deploy-hf-space.yml`
-- Trigger: push to `develop` (and manual dispatch)
+- Trigger: push to `develop` or `main` (and manual dispatch)
 - Behavior: builds a clean deploy directory and uploads it to `Bkane56/national-park-trip-planner` with `hf upload ... --delete="*"`
 - Auth: GitHub secret `HF_TOKEN` (token must have write access to the Space)
 
 The keep-alive workflow is intentionally separate and does not deploy code.
+General PR/push test execution is handled by `.github/workflows/ci.yml`.
 
 ## Environment variables
 

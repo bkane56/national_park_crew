@@ -54,25 +54,15 @@ jobs:
       - name: Upload deploy bundle to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
-          NATIONAL_PARK_TOKEN_3: ${{ secrets.NATIONAL_PARK_TOKEN_3 }}
         run: |
           set -euo pipefail
-          AUTH_TOKEN="${HF_TOKEN:-}"
-          if [ -z "${AUTH_TOKEN}" ]; then
-            AUTH_TOKEN="${HF_API_TOKEN:-}"
-          fi
-          if [ -z "${AUTH_TOKEN}" ]; then
-            AUTH_TOKEN="${NATIONAL_PARK_TOKEN_3:-}"
-          fi
-
-          if [ -z "${AUTH_TOKEN}" ]; then
-            echo "Missing required GitHub secret: set HF_TOKEN, HF_API_TOKEN, or NATIONAL_PARK_TOKEN_3" >&2
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "Missing required GitHub secret: HF_TOKEN" >&2
             exit 1
           fi
 
           hf upload "$SPACE_REPO" "$DEPLOY_DIR" . \
             --repo-type space \
-            --token "$AUTH_TOKEN" \
+            --token "$HF_TOKEN" \
             --delete="*" \
             --commit-message "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"

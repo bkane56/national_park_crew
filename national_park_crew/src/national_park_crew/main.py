@@ -3,9 +3,12 @@ import sys
 import warnings
 
 from datetime import datetime
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from .crew import NationalParkCrew
-from .planner_service import DEFAULT_PARK_SCOPE, PlannerRequest, run_planner
+from .planner_service import DEFAULT_PARK_SCOPE, PlannerRequest, PlannerRuntimeError, run_planner
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -15,6 +18,7 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 # interpolate any tasks and agents information
 
 def run():
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
     """
     Run the crew.
     """
@@ -34,8 +38,8 @@ def run():
 
     try:
         run_planner(request)
-    except Exception as e:
-        raise Exception(f"An error occurred while running the crew: {e}")
+    except PlannerRuntimeError as exc:
+        raise RuntimeError(f"An error occurred while running the crew: {exc}") from exc
 
 
 def train():

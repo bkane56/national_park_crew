@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import time
 from html import escape
 from pathlib import Path
 
@@ -18,6 +19,23 @@ from reportlab.platypus import (
     Spacer,
 )
 
+EXPORT_PREFIX = "tripplanner_"
+EXPORT_TTL_SECONDS = 3600
+
+
+def cleanup_stale_exports(max_age_seconds: int = EXPORT_TTL_SECONDS) -> None:
+    """Remove stale temp exports from prior runs to prevent disk buildup."""
+    now = time.time()
+    temp_dir = Path(tempfile.gettempdir())
+    for ext in ("md", "pdf"):
+        for candidate in temp_dir.glob(f"{EXPORT_PREFIX}*.{ext}"):
+            try:
+                age_seconds = now - candidate.stat().st_mtime
+                if age_seconds > max_age_seconds:
+                    candidate.unlink(missing_ok=True)
+            except OSError:
+                continue
+
 
 def sanitize_download_stem(raw: str) -> str:
     """Filesystem-safe basename stem (no path separators)."""
@@ -27,7 +45,7 @@ def sanitize_download_stem(raw: str) -> str:
 
 
 def write_temp_markdown(text: str, stem: str) -> str:
-    fd, path_str = tempfile.mkstemp(prefix=f"{stem}_", suffix=".md", text=True)
+    fd, path_str = tempfile.mkstemp(prefix=f"{EXPORT_PREFIX}{stem}_", suffix=".md", text=True)
     os.close(fd)
     path = Path(path_str)
     path.write_text(text, encoding="utf-8")
@@ -61,7 +79,7 @@ def _markdown_table_block(lines: list[str]) -> tuple[str, int]:
 
 def write_temp_pdf(text: str, stem: str) -> str:
     """Render markdown to a simple PDF (headers, lists, paragraphs, code blocks, tables as monospace)."""
-    _, path_str = tempfile.mkstemp(prefix=f"{stem}_", suffix=".pdf")
+    _, path_str = tempfile.mkstemp(prefix=f"{EXPORT_PREFIX}{stem}_", suffix=".pdf")
     path = Path(path_str)
 
     styles = getSampleStyleSheet()
@@ -216,6 +234,7 @@ def build_download_file(markdown_text: str, stem: str, format_choice: str) -> st
     """Return path to temp file or None when there is nothing to export."""
     if not markdown_text.strip():
         return None
+    cleanup_stale_exports()
     safe = sanitize_download_stem(stem)
     fmt = format_choice.strip().lower()
     if fmt.startswith("pdf"):

@@ -11,44 +11,88 @@ class NationalParkCrew:
     agents: List[BaseAgent]
     tasks: List[Task]
 
-    general_web_tool = WebsiteSearchTool()
-    general_scrape_tool = ScrapeWebsiteTool()
+    def __init__(self) -> None:
+        # Lazily initialize tools so import-time side effects are avoided.
+        self._general_web_tool: WebsiteSearchTool | None = None
+        self._general_scrape_tool: ScrapeWebsiteTool | None = None
+        self._national_park_web_tool: WebsiteSearchTool | None = None
+        self._national_park_scrape_tool: ScrapeWebsiteTool | None = None
+        self._accommodations_web_tool: WebsiteSearchTool | None = None
+        self._accommodations_scrape_tool: ScrapeWebsiteTool | None = None
+        self._flight_web_tool: WebsiteSearchTool | None = None
+        self._flight_scrape_tool: ScrapeWebsiteTool | None = None
 
-    national_park_web_tool = WebsiteSearchTool(
-        name="National Park Researcher",
-        description="Search for information about national parks",
-        url="https://www.nps.gov/index.htm"
-    )
+    @property
+    def general_web_tool(self) -> WebsiteSearchTool:
+        if self._general_web_tool is None:
+            self._general_web_tool = WebsiteSearchTool()
+        return self._general_web_tool
 
-    national_park_scrape_tool = ScrapeWebsiteTool(
-        name="National Park Scraper",
-        description="Scrape information about national parks",
-        url="https://www.nps.gov/index.htm"
-    )
+    @property
+    def general_scrape_tool(self) -> ScrapeWebsiteTool:
+        if self._general_scrape_tool is None:
+            self._general_scrape_tool = ScrapeWebsiteTool()
+        return self._general_scrape_tool
 
-    accommodations_web_tool = WebsiteSearchTool(
-        name="Accommodations Researcher",
-        description="Search for information about hotels, motels, resorts, rentals and more in the US.",
-        url=BOOKING_URL
-    )
+    @property
+    def national_park_web_tool(self) -> WebsiteSearchTool:
+        if self._national_park_web_tool is None:
+            self._national_park_web_tool = WebsiteSearchTool(
+                name="National Park Researcher",
+                description="Search for information about national parks",
+                url="https://www.nps.gov/index.htm",
+            )
+        return self._national_park_web_tool
 
-    accommodations_scrape_tool = ScrapeWebsiteTool(
-        name="Accommodations Scraper",
-        description="Scrape information about hotels, motels, resorts, rentals and more in the US.",
-        url=BOOKING_URL
-    )
+    @property
+    def national_park_scrape_tool(self) -> ScrapeWebsiteTool:
+        if self._national_park_scrape_tool is None:
+            self._national_park_scrape_tool = ScrapeWebsiteTool(
+                name="National Park Scraper",
+                description="Scrape information about national parks",
+                url="https://www.nps.gov/index.htm",
+            )
+        return self._national_park_scrape_tool
 
-    flight_web_tool = WebsiteSearchTool(
-        name="Flight Researcher",
-        description="Search for information about flights",
-        url="https://www.google.com/travel/flights"
-    )
+    @property
+    def accommodations_web_tool(self) -> WebsiteSearchTool:
+        if self._accommodations_web_tool is None:
+            self._accommodations_web_tool = WebsiteSearchTool(
+                name="Accommodations Researcher",
+                description="Search for information about hotels, motels, resorts, rentals and more in the US.",
+                url=self.BOOKING_URL,
+            )
+        return self._accommodations_web_tool
 
-    flight_scrape_tool = ScrapeWebsiteTool(
-        name="Flight Scraper",
-        description="Scrape information about flights",
-        url="https://www.google.com/travel/flights"
-    )
+    @property
+    def accommodations_scrape_tool(self) -> ScrapeWebsiteTool:
+        if self._accommodations_scrape_tool is None:
+            self._accommodations_scrape_tool = ScrapeWebsiteTool(
+                name="Accommodations Scraper",
+                description="Scrape information about hotels, motels, resorts, rentals and more in the US.",
+                url=self.BOOKING_URL,
+            )
+        return self._accommodations_scrape_tool
+
+    @property
+    def flight_web_tool(self) -> WebsiteSearchTool:
+        if self._flight_web_tool is None:
+            self._flight_web_tool = WebsiteSearchTool(
+                name="Flight Researcher",
+                description="Search for information about flights",
+                url="https://www.google.com/travel/flights",
+            )
+        return self._flight_web_tool
+
+    @property
+    def flight_scrape_tool(self) -> ScrapeWebsiteTool:
+        if self._flight_scrape_tool is None:
+            self._flight_scrape_tool = ScrapeWebsiteTool(
+                name="Flight Scraper",
+                description="Scrape information about flights",
+                url="https://www.google.com/travel/flights",
+            )
+        return self._flight_scrape_tool
 
     @agent
     def general_researcher(self) -> Agent:

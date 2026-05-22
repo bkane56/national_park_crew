@@ -2,6 +2,9 @@
 
 A portfolio-grade AI trip planner that uses a CrewAI multi-agent workflow to research airports, flights, lodging, national park activities, and a final itinerary. The public UI includes a mocked demo mode for safe recruiter review and a gated real-run mode for authorized users.
 
+**Live demo:** [Hugging Face Space](https://huggingface.co/spaces/Bkane56/national-park-trip-planner)  
+**View code:** [GitHub repository](https://github.com/briankane/National_Park_Trip_Planner)
+
 ## Highlights
 
 - Multi-agent CrewAI pipeline with role-specific research and writing agents.
@@ -43,20 +46,36 @@ The important safety boundary is in `planner_service.py`: demo mode returns pack
 ## Project Structure
 
 ```text
-national_park_crew/
-|-- pyproject.toml
-|-- src/national_park_crew/
-|   |-- app.py                    # Gradio UI
-|   |-- planner_service.py        # Validation, demo mode, access gate, CrewAI runner
-|   |-- crew.py                   # CrewAI agents/tasks wiring
-|   |-- export_utils.py           # Markdown/PDF download helpers
-|   |-- demo_data/                # Packaged mocked itinerary data
-|   `-- config/
-|       |-- agents.yaml           # Agent roles, goals, and model choices
-|       `-- tasks.yaml            # Sequential planning tasks
-`-- tests/
-    |-- test_planner_service.py
-    `-- test_export_utils.py
+.
+|-- app.py
+|-- Dockerfile
+|-- requirements.txt
+|-- .github/workflows/
+|   |-- ci.yml
+|   |-- deploy-hf-space.yml
+|   `-- keep-hf-space-alive.yml
+|-- LICENSE
+`-- national_park_crew/
+    |-- DEPLOYMENT.md
+    |-- pyproject.toml
+    |-- src/national_park_crew/
+    |   |-- app.py                    # Gradio UI composition
+    |   |-- ui_handlers.py            # Run/download handlers
+    |   |-- ui_helpers.py             # UI helper logic and request construction
+    |   |-- planner_service.py        # Validation, demo mode, access gate, CrewAI runner
+    |   |-- crew.py                   # CrewAI agents/tasks wiring
+    |   |-- export_utils.py           # Markdown/PDF download helpers
+    |   |-- demo_data/                # Packaged mocked itinerary data
+    |   `-- config/
+    |       |-- agents.yaml           # Agent roles, goals, and model choices
+    |       `-- tasks.yaml            # Sequential planning tasks
+    `-- tests/
+        |-- test_app.py
+        |-- test_assets.py
+        |-- test_config_contract.py
+        |-- test_export_utils.py
+        |-- test_planner_service.py
+        `-- test_theme_contrast.py
 ```
 
 ## Run Locally
@@ -148,7 +167,7 @@ Recommended public setup:
 
 ### Hugging Face deploy pipeline (single source of truth)
 
-This repository is the source of truth for Space updates. Pushes to `develop` trigger `deploy-hf-space`, which uploads a clean Docker Space bundle to:
+This repository is the source of truth for Space updates. Pushes to `develop` and `main` trigger `deploy-hf-space`, which uploads a clean Docker Space bundle to:
 
 - `Bkane56/national-park-trip-planner`
 

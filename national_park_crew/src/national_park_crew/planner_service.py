@@ -22,6 +22,8 @@ REAL_MODE_LABEL = "Real planning run - access code required"
 DEMO_FALLBACK_PHASE = "Demo mode - mocked data (fallback)"
 REAL_RUNS_ENABLED_ENV = "REAL_RUNS_ENABLED"
 REAL_RUN_ACCESS_CODE_ENV = "REAL_RUN_ACCESS_CODE"
+MAX_RUNTIME_SECONDS_ENV = "PLANNER_MAX_RUNTIME_SECONDS"
+DEFAULT_MAX_RUNTIME_SECONDS = 600.0
 
 # CrewAI telemetry installs signal handlers. In Gradio queue workers this code runs
 # outside the main thread, which can produce noisy signal registration tracebacks.
@@ -79,6 +81,24 @@ class PlannerResult:
     markdown: str
     raw_result: object
     log_output: str
+
+
+class _ThreadSafeLogBuffer:
+    def __init__(self) -> None:
+        self._buffer = io.StringIO()
+        self._lock = threading.Lock()
+
+    def write(self, value: str) -> int:
+        with self._lock:
+            return self._buffer.write(value)
+
+    def flush(self) -> None:
+        # redirect_stdout/redirect_stderr expect a flush method.
+        return None
+
+    def getvalue(self) -> str:
+        with self._lock:
+            return self._buffer.getvalue()
 
 
 def parse_iso_date(value: str, field_name: str) -> date:
@@ -140,6 +160,21 @@ def _extract_markdown(raw_result: object) -> str:
 
 def _env_flag_enabled(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_timeout_seconds(
+    env: Optional[dict[str, str]] = None,
+    fallback: float = DEFAULT_MAX_RUNTIME_SECONDS,
+) -> float:
+    values = os.environ if env is None else env
+    raw = str(values.get(MAX_RUNTIME_SECONDS_ENV, "")).strip()
+    if not raw:
+        return fallback
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return fallback
+    return parsed if parsed > 0 else fallback
 
 
 def real_runs_enabled(env: Optional[dict[str, str]] = None) -> bool:
@@ -235,7 +270,7 @@ def run_planner(
     progress_callback = progress_callback or (lambda _phase, _message: None)
     progress_callback("Queued", "Starting trip planning workflow...")
 
-    log_buffer = io.StringIO()
+    log_buffer = _ThreadSafeLogBuffer()
     try:
         progress_callback("Running", "CrewAI agents are gathering flights, parks, and lodging data.")
         with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
@@ -263,6 +298,7 @@ def iter_planner_updates(
     request: PlannerRequest,
     poll_seconds: float = 1.0,
     crew_factory: Optional[Callable[[], object]] = None,
+    max_runtime_seconds: float | None = None,
 ) -> Iterator[dict[str, object]]:
     if crew_factory is None:
         from .crew import NationalParkCrew
@@ -271,7 +307,12 @@ def iter_planner_updates(
 
     status = {"done": False, "result": None, "error": None}
     progress_events: list[tuple[str, str]] = [("Queued", "Validating inputs and preparing kickoff payload.")]
-    log_buffer = io.StringIO()
+    log_buffer = _ThreadSafeLogBuffer()
+    effective_timeout = (
+        max_runtime_seconds
+        if max_runtime_seconds is not None
+        else _runtime_timeout_seconds()
+    )
 
     def progress_callback(phase: str, message: str) -> None:
         progress_events.append((phase, message))
@@ -303,10 +344,19 @@ def iter_planner_updates(
     last_phase = "Queued"
     last_message = "Validating inputs and preparing kickoff payload."
     while not status["done"]:
+        elapsed_seconds = time.time() - started
+        if elapsed_seconds > effective_timeout:
+            status["error"] = PlannerRuntimeError(
+                f"Planner run exceeded {int(effective_timeout)} seconds and was stopped."
+            )
+            progress_callback("Error", "Planner run timed out before completion.")
+            status["done"] = True
+            break
+
         emitted_update = False
         while last_event_index < len(progress_events):
             phase, message = progress_events[last_event_index]
-            elapsed = int(time.time() - started)
+            elapsed = int(elapsed_seconds)
             logs = log_buffer.getvalue()
             inferred_phase = _detect_phase(logs) if phase == "Running" else phase
             last_phase = inferred_phase
