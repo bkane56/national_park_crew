@@ -4,6 +4,7 @@ A portfolio-grade AI trip planner that uses a CrewAI multi-agent workflow to res
 
 **Live demo:** [Hugging Face Space](https://huggingface.co/spaces/Bkane56/national-park-trip-planner)  
 **View code:** [GitHub repository](https://github.com/briankane/National_Park_Trip_Planner)
+**Security policy:** [SECURITY.md](SECURITY.md)
 
 ## Highlights
 
@@ -120,6 +121,7 @@ Optional operational toggles:
 
 - `CREWAI_DISABLE_TELEMETRY=true`
 - `OTEL_SDK_DISABLED=true`
+- `PLANNER_MAX_RUNTIME_SECONDS=600` (default timeout budget; long runs are terminated)
 
 If the access code is missing or incorrect, the app **falls back to mocked demo data** with a notice in the status panel. CrewAI and paid APIs are never invoked in that case.
 
@@ -133,6 +135,22 @@ The UI loads `national_park_crew/.env` automatically on startup for local develo
 4. Tell the reviewer to select **Real planning run - access code required**, paste the code, and click **Generate Itinerary**.
 
 Public visitors who leave demo mode selected, or who select real mode without a valid code, always get the mocked itinerary.
+
+## Security and Responsible Use
+
+This project is intentionally built as a public, recruiter-facing demo with safety controls:
+
+- Untrusted user trip inputs are normalized, length-limited, and validated.
+- Instruction-like prompt-injection content is rejected before agent kickoff.
+- Real runs are access-code gated and unauthorized requests fall back to mocked demo output.
+- Runtime logs are redacted/truncated before being surfaced to the UI.
+- Real executions are isolated with timeout enforcement to stop runaway/costly runs.
+
+For safe operations:
+
+- Never commit `.env` files or real secrets.
+- Rotate `OPENAI_API_KEY` and `REAL_RUN_ACCESS_CODE` periodically.
+- Share `REAL_RUN_ACCESS_CODE` only out of band with trusted reviewers.
 
 ### Kill switch
 

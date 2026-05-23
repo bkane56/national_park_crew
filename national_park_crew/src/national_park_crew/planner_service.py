@@ -5,7 +5,9 @@ from datetime import date, datetime
 from hmac import compare_digest
 from importlib import resources
 import io
+import multiprocessing as mp
 import os
+import queue
 import re
 import threading
 import time
@@ -24,6 +26,10 @@ REAL_RUNS_ENABLED_ENV = "REAL_RUNS_ENABLED"
 REAL_RUN_ACCESS_CODE_ENV = "REAL_RUN_ACCESS_CODE"
 MAX_RUNTIME_SECONDS_ENV = "PLANNER_MAX_RUNTIME_SECONDS"
 DEFAULT_MAX_RUNTIME_SECONDS = 600.0
+MAX_LOCATION_LENGTH = 120
+MAX_TRIP_SUMMARY_LENGTH = 600
+MAX_NATIONAL_PARKS_LENGTH = 500
+MAX_LOG_OUTPUT_CHARS = 12000
 
 # CrewAI telemetry installs signal handlers. In Gradio queue workers this code runs
 # outside the main thread, which can produce noisy signal registration tracebacks.
@@ -36,6 +42,36 @@ _PHASE_PATTERNS = [
     ("Accommodations", re.compile(r"accommodation|lodging|hotel", re.IGNORECASE)),
     ("Park activity planning", re.compile(r"national[_\s-]?park", re.IGNORECASE)),
     ("Report generation", re.compile(r"reporting|itinerary|writer", re.IGNORECASE)),
+]
+
+_PROMPT_INJECTION_PATTERNS = [
+    re.compile(
+        r"\b(ignore|disregard|override|bypass)\b.{0,40}\b(previous|prior|system|developer|instruction)s?\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bsystem\s+prompt\b", re.IGNORECASE),
+    re.compile(r"\bdeveloper\s+message\b", re.IGNORECASE),
+    re.compile(r"\b(tool|function)\s*(call|invocation)?\b", re.IGNORECASE),
+    re.compile(r"\b(jailbreak|prompt injection)\b", re.IGNORECASE),
+]
+
+_LOG_REDACTION_PATTERNS = [
+    (
+        re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s]+"),
+        r"\1[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(r"(?i)\b(api[_-]?key|token|secret|password)\b\s*[:=]\s*([^\s,;]+)"),
+        r"\1=[REDACTED_SECRET]",
+    ),
+    (
+        re.compile(r"(?i)\b(access[_-]?code)\b\s*[:=]\s*([^\s,;]+)"),
+        r"\1=[REDACTED_SECRET]",
+    ),
+    (
+        re.compile(r"\bsk-[A-Za-z0-9]{16,}\b"),
+        "[REDACTED_API_KEY]",
+    ),
 ]
 
 
@@ -51,6 +87,49 @@ class RealRunAccessError(PlannerInputError):
     """Raised when a visitor asks for a real paid run without authorization."""
 
 
+def _strip_control_characters(value: str) -> str:
+    return "".join(ch for ch in value if ch in {"\n", "\t"} or ch.isprintable())
+
+
+def _normalize_whitespace(value: str) -> str:
+    without_controls = _strip_control_characters(value)
+    return re.sub(r"\s+", " ", without_controls).strip()
+
+
+def _contains_prompt_injection(value: str) -> bool:
+    lowered = value.strip()
+    return any(pattern.search(lowered) for pattern in _PROMPT_INJECTION_PATTERNS)
+
+
+def _validate_untrusted_text(
+    value: str,
+    *,
+    field_name: str,
+    max_length: int,
+    allow_empty: bool = False,
+    detect_injection: bool = True,
+) -> str:
+    normalized = _normalize_whitespace(value)
+    if not normalized and not allow_empty:
+        raise PlannerInputError(f"{field_name} is required.")
+    if len(normalized) > max_length:
+        raise PlannerInputError(f"{field_name} exceeds {max_length} characters.")
+    if detect_injection and normalized and _contains_prompt_injection(normalized):
+        raise PlannerInputError(
+            f"{field_name} contains instruction-like content that is not allowed."
+        )
+    return normalized
+
+
+def _sanitize_log_output(logs: str) -> str:
+    redacted = logs
+    for pattern, replacement in _LOG_REDACTION_PATTERNS:
+        redacted = pattern.sub(replacement, redacted)
+    if len(redacted) > MAX_LOG_OUTPUT_CHARS:
+        return redacted[:MAX_LOG_OUTPUT_CHARS] + "\n...[logs truncated for safety]..."
+    return redacted
+
+
 @dataclass(frozen=True)
 class PlannerRequest:
     from_location: str
@@ -64,10 +143,29 @@ class PlannerRequest:
     current_date: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not self.from_location.strip():
-            raise PlannerInputError("Departure location is required.")
-        if not self.to_location.strip():
-            raise PlannerInputError("Arrival region is required.")
+        _validate_untrusted_text(
+            self.from_location,
+            field_name="from_location",
+            max_length=MAX_LOCATION_LENGTH,
+            detect_injection=False,
+        )
+        _validate_untrusted_text(
+            self.to_location,
+            field_name="to_location",
+            max_length=MAX_LOCATION_LENGTH,
+            detect_injection=False,
+        )
+        _validate_untrusted_text(
+            self.national_parks,
+            field_name="national_parks",
+            max_length=MAX_NATIONAL_PARKS_LENGTH,
+        )
+        if self.trip:
+            _validate_untrusted_text(
+                self.trip,
+                field_name="trip",
+                max_length=MAX_TRIP_SUMMARY_LENGTH,
+            )
         departure = parse_iso_date(self.departure_date, "departure_date")
         returning = parse_iso_date(self.return_date, "return_date")
         if returning < departure:
@@ -101,6 +199,62 @@ class _ThreadSafeLogBuffer:
             return self._buffer.getvalue()
 
 
+class _QueueStreamingWriter:
+    """Child-process stream writer that batches and forwards logs to parent."""
+
+    def __init__(self, out_queue: mp.queues.Queue, flush_threshold: int = 256) -> None:
+        self._out_queue = out_queue
+        self._flush_threshold = flush_threshold
+        self._local_buffer = io.StringIO()
+        self._pending = ""
+
+    def write(self, value: str) -> int:
+        if not value:
+            return 0
+        self._local_buffer.write(value)
+        self._pending += value
+        if "\n" in value or len(self._pending) >= self._flush_threshold:
+            self._out_queue.put({"type": "log", "chunk": self._pending})
+            self._pending = ""
+        return len(value)
+
+    def flush(self) -> None:
+        if self._pending:
+            self._out_queue.put({"type": "log", "chunk": self._pending})
+            self._pending = ""
+        return None
+
+    def getvalue(self) -> str:
+        return self._local_buffer.getvalue()
+
+
+def _process_worker_kickoff(inputs: dict[str, str], out_queue: mp.queues.Queue) -> None:
+    """Run crew kickoff in a killable child process."""
+    writer = _QueueStreamingWriter(out_queue)
+    try:
+        from .crew import NationalParkCrew
+
+        with redirect_stdout(writer), redirect_stderr(writer):
+            raw_result = NationalParkCrew().crew().kickoff(inputs=inputs)
+        writer.flush()
+        out_queue.put(
+            {
+                "type": "result",
+                "markdown": _extract_markdown(raw_result),
+                # Avoid pickling complex CrewAI objects across process boundaries.
+                "raw_result": str(raw_result),
+                "logs": _sanitize_log_output(writer.getvalue()),
+            }
+        )
+    except Exception:  # noqa: BLE001
+        out_queue.put(
+            {
+                "type": "error",
+                "message": "Planner run failed due to an internal error.",
+            }
+        )
+
+
 def parse_iso_date(value: str, field_name: str) -> date:
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
@@ -118,26 +272,59 @@ def slugify_location(value: str) -> str:
 
 def build_trip_summary(request: PlannerRequest) -> str:
     if request.trip and request.trip.strip():
-        return request.trip.strip()
+        return _validate_untrusted_text(
+            request.trip,
+            field_name="trip",
+            max_length=MAX_TRIP_SUMMARY_LENGTH,
+        )
+    from_location = _validate_untrusted_text(
+        request.from_location,
+        field_name="from_location",
+        max_length=MAX_LOCATION_LENGTH,
+        detect_injection=False,
+    )
+    to_location = _validate_untrusted_text(
+        request.to_location,
+        field_name="to_location",
+        max_length=MAX_LOCATION_LENGTH,
+        detect_injection=False,
+    )
     return (
-        f"I live in {request.from_location.strip()}. "
-        f"I want to visit the National Parks near {request.to_location.strip()}."
+        f"I live in {from_location}. "
+        f"I want to visit the National Parks near {to_location}."
     )
 
 
 def build_kickoff_inputs(request: PlannerRequest) -> dict[str, str]:
-    departure_slug = request.departure_city_slug or slugify_location(request.from_location)
-    arrival_slug = request.arrival_city_slug or slugify_location(request.to_location)
+    from_location = _validate_untrusted_text(
+        request.from_location,
+        field_name="from_location",
+        max_length=MAX_LOCATION_LENGTH,
+        detect_injection=False,
+    )
+    to_location = _validate_untrusted_text(
+        request.to_location,
+        field_name="to_location",
+        max_length=MAX_LOCATION_LENGTH,
+        detect_injection=False,
+    )
+    national_parks = _validate_untrusted_text(
+        request.national_parks,
+        field_name="national_parks",
+        max_length=MAX_NATIONAL_PARKS_LENGTH,
+    )
+    departure_slug = request.departure_city_slug or slugify_location(from_location)
+    arrival_slug = request.arrival_city_slug or slugify_location(to_location)
     current_date = request.current_date or str(datetime.now().date())
 
     return {
         "trip": build_trip_summary(request),
         "current_date": current_date,
-        "from": request.from_location.strip(),
-        "to": request.to_location.strip(),
+        "from": from_location,
+        "to": to_location,
         "departure_city": slugify_location(departure_slug),
         "arrival_city": slugify_location(arrival_slug),
-        "national_parks": request.national_parks.strip() or DEFAULT_PARK_SCOPE,
+        "national_parks": national_parks or DEFAULT_PARK_SCOPE,
         "departure_date": request.departure_date,
         "return_date": request.return_date,
     }
@@ -276,14 +463,14 @@ def run_planner(
         with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
             raw_result = crew_factory().crew().kickoff(inputs=inputs)
     except Exception as exc:  # noqa: BLE001 - we re-map to user-safe runtime error
-        raise PlannerRuntimeError(f"Planner run failed: {exc}") from exc
+        raise PlannerRuntimeError("Planner run failed due to an internal error.") from exc
 
     markdown = _extract_markdown(raw_result)
     progress_callback("Completed", "Itinerary generated successfully.")
     return PlannerResult(
         markdown=markdown,
         raw_result=raw_result,
-        log_output=log_buffer.getvalue(),
+        log_output=_sanitize_log_output(log_buffer.getvalue()),
     )
 
 
@@ -300,6 +487,7 @@ def iter_planner_updates(
     crew_factory: Optional[Callable[[], object]] = None,
     max_runtime_seconds: float | None = None,
 ) -> Iterator[dict[str, object]]:
+    user_supplied_crew_factory = crew_factory is not None
     if crew_factory is None:
         from .crew import NationalParkCrew
 
@@ -317,39 +505,93 @@ def iter_planner_updates(
     def progress_callback(phase: str, message: str) -> None:
         progress_events.append((phase, message))
 
-    def worker() -> None:
-        try:
-            inputs = build_kickoff_inputs(request)
-            progress_callback("Running", "CrewAI agents are now executing tasks.")
-            with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
-                raw_result = crew_factory().crew().kickoff(inputs=inputs)
-            markdown = _extract_markdown(raw_result)
-            status["result"] = PlannerResult(
-                markdown=markdown,
-                raw_result=raw_result,
-                log_output=log_buffer.getvalue(),
-            )
-            progress_callback("Completed", "Itinerary generated successfully.")
-        except Exception as exc:  # noqa: BLE001
-            status["error"] = PlannerRuntimeError(f"Planner run failed: {exc}")
-            progress_callback("Error", "Planner run failed. See details below.")
-        finally:
-            status["done"] = True
-
-    thread = threading.Thread(target=worker, daemon=True)
     started = time.time()
-    thread.start()
+    worker_thread: threading.Thread | None = None
+    worker_process: mp.Process | None = None
+    process_queue: mp.queues.Queue | None = None
+
+    if user_supplied_crew_factory:
+        # Custom factories are useful in tests, but cannot be safely killed via
+        # process termination without custom serialization contracts.
+        def worker() -> None:
+            try:
+                inputs = build_kickoff_inputs(request)
+                progress_callback("Running", "CrewAI agents are now executing tasks.")
+                with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
+                    raw_result = crew_factory().crew().kickoff(inputs=inputs)
+                markdown = _extract_markdown(raw_result)
+                status["result"] = PlannerResult(
+                    markdown=markdown,
+                    raw_result=raw_result,
+                    log_output=_sanitize_log_output(log_buffer.getvalue()),
+                )
+                progress_callback("Completed", "Itinerary generated successfully.")
+            except Exception:  # noqa: BLE001
+                status["error"] = PlannerRuntimeError("Planner run failed due to an internal error.")
+                progress_callback("Error", "Planner run failed. See details below.")
+            finally:
+                status["done"] = True
+
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+    else:
+        inputs = build_kickoff_inputs(request)
+        progress_callback("Running", "CrewAI agents are now executing tasks.")
+        ctx = mp.get_context("spawn")
+        process_queue = ctx.Queue()
+        worker_process = ctx.Process(
+            target=_process_worker_kickoff,
+            args=(inputs, process_queue),
+            daemon=True,
+        )
+        worker_process.start()
 
     last_event_index = 0
     last_phase = "Queued"
     last_message = "Validating inputs and preparing kickoff payload."
     while not status["done"]:
         elapsed_seconds = time.time() - started
+
+        if worker_process is not None and process_queue is not None:
+            while True:
+                try:
+                    payload = process_queue.get_nowait()
+                except queue.Empty:
+                    break
+                msg_type = payload.get("type")
+                if msg_type == "log":
+                    log_buffer.write(str(payload.get("chunk", "")))
+                elif msg_type == "result":
+                    status["result"] = PlannerResult(
+                        markdown=str(payload.get("markdown", "")),
+                        raw_result=payload.get("raw_result"),
+                        log_output=_sanitize_log_output(log_buffer.getvalue()),
+                    )
+                    progress_callback("Completed", "Itinerary generated successfully.")
+                    status["done"] = True
+                elif msg_type == "error":
+                    status["error"] = PlannerRuntimeError(
+                        str(payload.get("message") or "Planner run failed due to an internal error.")
+                    )
+                    progress_callback("Error", "Planner run failed. See details below.")
+                    status["done"] = True
+
+            if not status["done"] and worker_process.exitcode is not None:
+                status["error"] = PlannerRuntimeError("Planner run stopped unexpectedly.")
+                progress_callback("Error", "Planner process stopped unexpectedly.")
+                status["done"] = True
+
         if elapsed_seconds > effective_timeout:
             status["error"] = PlannerRuntimeError(
                 f"Planner run exceeded {int(effective_timeout)} seconds and was stopped."
             )
             progress_callback("Error", "Planner run timed out before completion.")
+            if worker_process is not None and worker_process.is_alive():
+                worker_process.terminate()
+                worker_process.join(timeout=2)
+                if worker_process.is_alive():
+                    worker_process.kill()
+                    worker_process.join(timeout=1)
             status["done"] = True
             break
 
@@ -357,8 +599,9 @@ def iter_planner_updates(
         while last_event_index < len(progress_events):
             phase, message = progress_events[last_event_index]
             elapsed = int(elapsed_seconds)
-            logs = log_buffer.getvalue()
-            inferred_phase = _detect_phase(logs) if phase == "Running" else phase
+            raw_logs = log_buffer.getvalue()
+            logs = _sanitize_log_output(raw_logs)
+            inferred_phase = _detect_phase(raw_logs) if phase == "Running" else phase
             last_phase = inferred_phase
             last_message = message
             yield {
@@ -379,12 +622,15 @@ def iter_planner_updates(
                 else last_phase,
                 "message": last_message,
                 "elapsed_seconds": int(time.time() - started),
-                "logs": log_buffer.getvalue(),
+                "logs": _sanitize_log_output(log_buffer.getvalue()),
                 "done": False,
             }
         time.sleep(poll_seconds)
 
-    final_logs = log_buffer.getvalue()
+    if worker_process is not None:
+        worker_process.join(timeout=0.5)
+
+    final_logs = _sanitize_log_output(log_buffer.getvalue())
     if status["error"] is not None:
         raise status["error"]
 
