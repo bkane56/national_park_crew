@@ -110,8 +110,8 @@ def build_app() -> gr.Blocks:
         trip_summary = gr.Textbox(
             label="Trip Summary",
             lines=3,
-            value=example_trip_summary(),
-            info="Optional. Leave as-is or customize the planning context.",
+            placeholder=example_trip_summary(),
+            info="Optional. Leave blank to auto-generate from your From/To locations.",
         )
         park_scope = gr.Textbox(
             label="National Parks Scope",
@@ -200,7 +200,7 @@ def build_app() -> gr.Blocks:
                 EXAMPLE_FROM,
                 EXAMPLE_TO,
                 *default_dates(),
-                example_trip_summary(),
+                "",
                 DEFAULT_PARK_SCOPE,
                 DEMO_MODE_LABEL,
                 gr.update(value="", visible=False),
